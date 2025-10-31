@@ -1,0 +1,91 @@
+# ============================================
+# FinGAT Configuration - Indian Stock Market
+# NSE/BSE Stocks Only
+# ============================================
+
+model:
+  name: "FinGAT_Indian_2025"
+  input_dim: 36
+  hidden_dim: 128
+  output_dim: 1
+  num_heads: 4
+  num_layers: 2
+  dropout: 0.3
+  use_residual: true
+  use_temporal: true
+
+data:
+  # Indian stock market configuration
+  market: "INDIA"
+  csv_folder_path: "indian_data"
+  max_stocks: 550
+  
+  # Time periods
+  start_date: "2020-01-01"
+  end_date: "2025-10-28"
+  lookback_window: 20
+  prediction_horizon: 5
+  
+  # Graph construction
+  correlation_threshold: 0.3
+  sector_connections: true
+  dynamic_edges: true
+  edge_update_frequency: "monthly"
+  
+  # Data splits
+  train_ratio: 0.7
+  val_ratio: 0.15
+  test_ratio: 0.15
+
+training:
+  # Optimization
+  optimizer: "AdamW"
+  learning_rate: 0.001
+  weight_decay: 0.01
+  scheduler: "CosineAnnealingLR"
+  
+  # Multi-task loss weights (adaptive)
+  alpha: 0.4  # MAE loss weight
+  beta: 0.3   # Classification loss weight  
+  gamma: 0.3  # Ranking loss weight
+  
+  # Training parameters
+  batch_size: 16
+  max_epochs: 50
+  patience: 15
+  gradient_clip_val: 1.0
+  
+  # Hardware
+  accelerator: "cpu"  # Change to "gpu" if you have CUDA
+  devices: "auto"
+
+evaluation:
+  metrics:
+    - "MRR"  # Mean Reciprocal Rank
+    - "Precision@5"
+    - "Precision@10" 
+    - "NDCG@5"
+    - "NDCG@10"
+  
+  top_k_values: [5, 10, 20]
+
+logging:
+  use_wandb: false  # Set to true if you use Weights & Biases
+  project_name: "FinGAT_India_2025"
+  save_dir: "logs/"
+  log_every_n_steps: 10
+  
+paths:
+  data_dir: "indian_data/"
+  checkpoints_dir: "checkpoints/"
+  results_dir: "results/"
+  logs_dir: "logs/"
+
+# Production API settings
+production:
+  model_serving: true
+  api_port: 8000
+  batch_inference: true
+  monitoring: true
+  auto_retrain: true
+  retrain_frequency: "daily"  # Train every day after NSE/BSE market close

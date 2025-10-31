@@ -1,0 +1,2 @@
+# This folder stores trained model checkpoints
+# Model files are not committed to Git (see .gitignore)

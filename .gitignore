@@ -1,0 +1,138 @@
+# ============================================
+# SENSITIVE FILES - NEVER COMMIT!
+# ============================================
+.env
+.env.local
+.env.*.local
+.env.production
+.env.development
+*.key
+*.pem
+
+
+# ============================================
+# PYTHON
+# ============================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+
+# ============================================
+# VIRTUAL ENVIRONMENT
+# ============================================
+venv/
+env/
+ENV/
+.venv/
+
+
+# ============================================
+# IDE & EDITORS
+# ============================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+.settings/
+
+
+# ============================================
+# OPERATING SYSTEM
+# ============================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+
+# ============================================
+# TESTING
+# ============================================
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+
+# ============================================
+# LOGS
+# ============================================
+*.log
+logs/
+lightning_logs/
+
+
+# ============================================
+# LARGE FILES - TOO BIG FOR GITHUB
+# ============================================
+# Large zip/archive files
+*.zip
+*.tar.gz
+*.rar
+*.7z
+
+# Large model checkpoints (>100MB)
+checkpoints/*.ckpt
+checkpoints/*.pt
+checkpoints/*.pth
+
+# Keep the folder
+!checkpoints/.gitkeep
+
+
+# ============================================
+# DATA FILES - OPTIONAL
+# ============================================
+# Uncomment if CSV files are too large (>50MB each)
+# indian_data/*.csv
+
+# Keep folder structure
+!indian_data/.gitkeep
+
+
+# ============================================
+# JUPYTER NOTEBOOKS (Optional)
+# ============================================
+.ipynb_checkpoints/
+*.ipynb
+
+
+# ============================================
+# DATABASE (Local)
+# ============================================
+*.db
+*.sqlite
+*.sqlite3
+
+
+# ============================================
+# MISC
+# ============================================
+*.bak
+*.tmp
+.cache/

@@ -1,86 +1,45 @@
-# ============================================
-# CORE DEEP LEARNING (Your Model)
-# ============================================
 torch>=2.3.0
 torchvision>=0.18.0
 torchaudio>=2.3.0
 torch-geometric>=2.6.0
-
-# ============================================
-# TRAINING FRAMEWORK (Your Model)
-# ============================================
 pytorch-lightning>=2.0.0
 torchmetrics>=1.2.0
-wandb>=0.15.0
-tensorboard>=2.14.0
 
-# ============================================
-# FINANCIAL DATA APIs (Your Model)
-# ============================================
+# RL support for Python 3.11+
+gymnasium==0.29.1
+stable-baselines3==1.8.0
+
+pandas>=2.0.0
+numpy>=1.24.0
+scikit-learn>=1.3.0
+scipy>=1.10.0
+matplotlib>=3.7.0
+seaborn>=0.12.0
+plotly>=5.15.0
+
 yfinance>=0.2.28
 alpha-vantage>=2.3.1
 pandas-datareader>=0.10.0
 quandl>=3.7.0
 
-# ============================================
-# DATA PROCESSING (Your Model)
-# ============================================
-numpy>=1.24.0
-pandas>=2.0.0
-scikit-learn>=1.3.0
-scipy>=1.10.0
-
-# ============================================
-# VISUALIZATION (Your Model)
-# ============================================
-matplotlib>=3.7.0
-seaborn>=0.12.0
-plotly>=5.15.0
-
-# ============================================
-# CONFIGURATION (Your Model)
-# ============================================
 hydra-core>=1.3.0
 omegaconf>=2.3.0
 pyyaml>=6.0.1
-
-# ============================================
-# UTILITIES (Your Model)
-# ============================================
 tqdm>=4.65.0
 joblib>=1.3.0
 
-# ============================================
-# TESTING & LINTING (Your Model)
-# ============================================
 pytest>=7.4.0
 black>=23.0.0
 flake8>=6.0.0
 mypy>=1.5.0
-
-# ============================================
-# ML OPS (Your Model)
-# ============================================
 mlflow>=2.5.0
 
-# ============================================
-# BACKEND API (NEW)
-# ============================================
 fastapi==0.104.1
-uvicorn[standard]==0.24.0
+uvicorn==0.24.0
 pydantic==2.5.0
 pydantic-settings==2.1.0
 python-dotenv==1.0.0
 python-multipart==0.0.6
-
-# ============================================
-# DATABASE (NEW)
-# ============================================
 sqlalchemy==2.0.23
 psycopg2-binary==2.9.9
-asyncpg==0.29.0
-
-# ============================================
-# TASK SCHEDULING (NEW)
-# ============================================
 apscheduler==3.10.4

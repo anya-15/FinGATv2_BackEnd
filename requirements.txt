@@ -6,7 +6,7 @@ pytorch-lightning>=2.0.0
 torchmetrics>=1.2.0
 
 # RL support for Python 3.11+
-gymnasium==0.29.1
+# gymnasium==0.29.1
 stable-baselines3==1.8.0
 
 pandas>=2.0.0

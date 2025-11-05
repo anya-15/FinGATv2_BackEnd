@@ -4,6 +4,7 @@ python-multipart==0.0.6
 apscheduler==3.10.4
 python-dotenv==1.0.0
 pydantic==2.4.0
+pydantic-settings==2.0.2       # <-- ADD THIS LINE
 psycopg2-binary==2.9.9
 SQLAlchemy==2.0.23
 asyncpg==0.28.0

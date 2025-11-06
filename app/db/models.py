@@ -319,7 +319,7 @@ class SystemMetrics(Base):
     recorded_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
     
     # Additional data
-    metadata = Column(Text, nullable=True)  # JSON string for additional context
+    extra_data = Column(Text, nullable=True)  # JSON string for additional context
     
     def __repr__(self):
         return f"<SystemMetrics(type={self.metric_type}, name={self.metric_name}, value={self.value})>"
@@ -335,5 +335,5 @@ class SystemMetrics(Base):
             "endpoint": self.endpoint,
             "model_version": self.model_version,
             "recorded_at": self.recorded_at.isoformat() if self.recorded_at else None,
-            "metadata": self.metadata
+            "extra_data": self.extra_data
         }

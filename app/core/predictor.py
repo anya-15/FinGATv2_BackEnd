@@ -126,22 +126,31 @@ class TopKPredictor:
         self._ensure_initialized()
         if not self._initialized:
             try:
+                logger.info("🔄 Initializing predictor...")
                 self.model, self.metadata = model_loader.get_model()
+                logger.info(f"✅ Model loaded: {type(self.model)}")
                 self.data_loader = FinancialDataset(
                     csv_folder_path=settings.DATA_PATH,
                     max_stocks=550
                 )
+                logger.info(f"✅ Data loader initialized for path: {settings.DATA_PATH}")
                 self._initialized = True
             except Exception as e:
-                logger.error(f"Cannot initialize predictor: {e}")
+                logger.error(f"❌ Cannot initialize predictor: {e}")
+                import traceback
+                logger.error(traceback.format_exc())
                 return []
         try:
             # Suppress stdout/stderr during data preparation to avoid Windows pipe errors
+            logger.info("📊 Preparing dataset...")
             with open(os.devnull, 'w') as devnull:
                 with redirect_stdout(devnull), redirect_stderr(devnull):
                     data, metadata = self.data_loader.prepare_dataset()
+            logger.info(f"✅ Dataset prepared: {data.x.shape[0]} stocks, {data.x.shape[1]} features")
         except Exception as e:
-            logger.error(f"Error preparing dataset: {e}")
+            logger.error(f"❌ Error preparing dataset: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
             return []
 
         x = data.x.to(self.device)

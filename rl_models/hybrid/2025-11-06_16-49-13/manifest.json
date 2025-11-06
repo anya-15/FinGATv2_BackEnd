@@ -1,0 +1,7 @@
+{
+  "run_id": "2025-11-06_16-49-13",
+  "features_path": "rl_models\\hybrid\\2025-11-06_16-49-13\\best_features.npy",
+  "hparams_path": "rl_models\\hybrid\\2025-11-06_16-49-13\\best_hparams.json",
+  "checkpoint_path": "C:\\Users\\hp\\FinGAT_Backend\\checkpoints\\fingat-hybrid-epoch=07-val_mrr=0.3333.ckpt",
+  "notes": "Hybrid RL: features + hparams; final 50-epoch training"
+}

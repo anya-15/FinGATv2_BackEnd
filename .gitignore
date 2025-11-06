@@ -104,6 +104,9 @@ checkpoints/*.pth
 # Keep the folder
 !checkpoints/.gitkeep
 
+# Allow production model (small enough for GitHub)
+!checkpoints/production_model.ckpt
+
 
 # ============================================
 # DATA FILES - OPTIONAL
@@ -142,7 +145,13 @@ rl_models/hyperparameter/
 !rl_models/selected_runs/
 !rl_models/selected_runs/latest_manifest.json
 
-# Prediction outputs
+# Allow latest RL model run (needed for predictions)
+!rl_models/hybrid/2025-11-06_16-49-13/
+!rl_models/hybrid/2025-11-06_16-49-13/*.json
+!rl_models/hybrid/2025-11-06_16-49-13/*.npy
+!rl_models/hybrid/2025-11-06_16-49-13/*.txt
+
+# Prediction outputs (generated files - keep folder only)
 predictions/*.csv
 predictions/*.json
 

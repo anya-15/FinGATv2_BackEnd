@@ -1,0 +1,7 @@
+{
+  "hidden_dim": 128,
+  "dropout": 0.2,
+  "learning_rate": 0.001,
+  "num_features": 9,
+  "val_accuracy": 0.3636363744735718
+}

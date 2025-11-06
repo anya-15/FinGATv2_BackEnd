@@ -1,0 +1,1 @@
+C:\Users\hp\FinGAT_Backend\checkpoints\fingat-hybrid-epoch=07-val_mrr=0.3333.ckpt

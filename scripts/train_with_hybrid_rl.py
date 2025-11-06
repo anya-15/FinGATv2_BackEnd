@@ -505,11 +505,23 @@ def train_with_hybrid_rl():
     print(f"✓ Saved checkpoint reference: {ckpt_txt}")
 
     # 4) Write run manifest
+    # Convert paths to relative and use forward slashes for cross-platform compatibility
+    def normalize_path(path):
+        """Convert to relative path with forward slashes"""
+        # Get relative path from project root
+        try:
+            rel_path = os.path.relpath(path)
+        except ValueError:
+            # If on different drives (Windows), use the path as-is
+            rel_path = path
+        # Replace backslashes with forward slashes
+        return rel_path.replace("\\", "/")
+    
     manifest = {
         "run_id": run_id,
-        "features_path": mask_path,
-        "hparams_path": hparams_path,
-        "checkpoint_path": best_ckpt,
+        "features_path": normalize_path(mask_path),
+        "hparams_path": normalize_path(hparams_path),
+        "checkpoint_path": normalize_path(best_ckpt),
         "notes": "Hybrid RL: features + hparams; final 50-epoch training",
     }
     manifest_path = os.path.join(save_root, "manifest.json")

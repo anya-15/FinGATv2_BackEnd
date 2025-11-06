@@ -89,3 +89,4 @@ production:
   monitoring: true
   auto_retrain: true
   retrain_frequency: "daily"  # Train every day after NSE/BSE market close
+  checkpoint_path: 'C:\Users\hp\FinGAT_Backend\checkpoints\fingat-hybrid-epoch=00-val_mrr=0.2000.ckpt'

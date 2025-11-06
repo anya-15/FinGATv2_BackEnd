@@ -220,7 +220,7 @@ class FinancialFeatureEngineer:
         self.sector_encoder = LabelEncoder()
         
     def create_technical_features(self, all_data: Dict[str, pd.DataFrame]) -> pd.DataFrame:
-        """Create technical indicators"""
+        """Create technical indicators - REDUCED to match manifest checkpoint (7 features)"""
         
         features = {}
         
@@ -228,26 +228,35 @@ class FinancialFeatureEngineer:
             try:
                 close_prices = df['Close']
                 
+                # ✅ MINIMAL FEATURE SET (7 features to match manifest checkpoint)
+                # After mean+std aggregation: 7 × 2 = 14 features (no sector encoding)
+                
+                # 1. Returns
                 features[f'{ticker}_returns'] = close_prices.pct_change()
-                features[f'{ticker}_log_returns'] = np.log(close_prices / close_prices.shift(1))
-                features[f'{ticker}_volatility_5'] = features[f'{ticker}_returns'].rolling(5).std()
+                
+                # 2. Volatility (20-day)
                 features[f'{ticker}_volatility_20'] = features[f'{ticker}_returns'].rolling(20).std()
+                
+                # 3-4. Moving averages
                 features[f'{ticker}_sma_5'] = close_prices.rolling(5).mean()
                 features[f'{ticker}_sma_20'] = close_prices.rolling(20).mean()
-                features[f'{ticker}_sma_50'] = close_prices.rolling(50).mean()
                 
+                # 5. RSI
                 delta = close_prices.diff()
                 gain = (delta.where(delta > 0, 0)).rolling(14).mean()
                 loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
                 rs = gain / (loss + 1e-8)
                 features[f'{ticker}_rsi'] = 100 - (100 / (1 + rs))
                 
-                for period in [5, 10, 20]:
-                    features[f'{ticker}_momentum_{period}'] = close_prices / close_prices.shift(period) - 1
+                # 6. Momentum (5-day)
+                features[f'{ticker}_momentum_5'] = close_prices / close_prices.shift(5) - 1
                 
+                # 7. Volume ratio
                 if 'Volume' in df.columns:
                     volume = df['Volume']
                     features[f'{ticker}_volume_ratio'] = volume / volume.rolling(20).mean()
+                else:
+                    features[f'{ticker}_volume_ratio'] = pd.Series(1.0, index=close_prices.index)
                 
                 print(f"✓ Created features for {ticker}")
                 
@@ -291,18 +300,13 @@ class FinancialFeatureEngineer:
                     print(f"  ✅ Target: Days -5 to -1 (5 days)")
                     print(f"  ✅ NO OVERLAP - NO LEAKAGE!")
                     print(f"  Features: {len(ticker_mean)} mean + {len(ticker_std)} std = {len(ticker_features)} total")
+                    print(f"  ✅ NO SECTOR ENCODING (checkpoint doesn't use it)")
             else:
                 ticker_features = np.zeros(len(ticker_cols) * 2)
             
-            sector_list = list(sectors.values())
-            if len(set(sector_list)) > 1:
-                self.sector_encoder.fit(sector_list)
-                sector_encoded = self.sector_encoder.transform([sectors[ticker]])[0]
-            else:
-                sector_encoded = 0
-            
-            combined_features = np.concatenate([ticker_features, [sector_encoded]])
-            node_features.append(combined_features)
+            # ✅ NO SECTOR ENCODING - checkpoint was trained without it
+            # Sector info is only used for graph construction (stock_to_sector)
+            node_features.append(ticker_features)
         
         print("=" * 60)
         
@@ -389,7 +393,52 @@ class FinancialDataset:
         print(f"  - {node_features.size(1)} features per node")
         print(f"  - {metadata['num_edges']} edges")
         
+        # --- SECTOR-AWARE GRAPH ATTRIBUTES FOR FinGAT (API & batch prediction) ---
+        # Create sector mapping
+        sector_list = sorted(list(set(sectors.values())))
+        sector_to_idx = {sector: i for i, sector in enumerate(sector_list)}
+        ticker_list = list(ticker_to_idx.keys())
+        
+        # ✅ FIXED: stock_to_sector should be a 1D tensor mapping each stock to its sector ID
+        # This is used as a "batch" tensor for pooling operations
+        stock_to_sector_mapping = []
+        for ticker in ticker_list:
+            sector_name = sectors[ticker]
+            sector_idx = sector_to_idx[sector_name]
+            stock_to_sector_mapping.append(sector_idx)
+        
+        stock_to_sector = torch.tensor(stock_to_sector_mapping, dtype=torch.long)
+        
+        # Create fully connected sector graph
+        sector_count = len(sector_list)
+        sector_edge_index = []
+        for i in range(sector_count):
+            for j in range(sector_count):
+                if i != j:
+                    sector_edge_index.append([i, j])
+        
+        if sector_edge_index:
+            sector_edge_index = torch.tensor(sector_edge_index, dtype=torch.long).t().contiguous()
+        else:
+            sector_edge_index = torch.empty((2, 0), dtype=torch.long)
+        
+        # Attach to data object
+        data.stock_to_sector = stock_to_sector
+        data.sector_edge_index = sector_edge_index
+        
+        # Store sector metadata
+        metadata['sector_to_idx'] = sector_to_idx
+        metadata['idx_to_sector'] = {v: k for k, v in sector_to_idx.items()}
+        metadata['num_sectors'] = sector_count
+        
+        print(f"\n✅ Sector-aware graph:")
+        print(f"  - {sector_count} sectors")
+        print(f"  - stock_to_sector shape: {stock_to_sector.shape}")
+        print(f"  - sector_edge_index shape: {sector_edge_index.shape}")
+
+        
         return data, metadata
+    
     
     def create_temporal_splits(self, data: Data, metadata: Dict, train_ratio: float = 0.7, val_ratio: float = 0.15) -> Tuple[Data, Data, Data]:
         """Create splits"""
@@ -417,17 +466,37 @@ class FinancialDataset:
         return train_data, val_data, test_data
     
     def _create_subgraph(self, data: Data, node_idx: torch.Tensor) -> Data:
+        """Create subgraph with sector-aware attributes"""
         x_sub = data.x[node_idx]
         y_sub = data.y[node_idx]
         
+        # Filter stock-level edges
         mask = torch.isin(data.edge_index[0], node_idx) & torch.isin(data.edge_index[1], node_idx)
         edge_index_sub = data.edge_index[:, mask]
         
+        # Remap node indices
         old_to_new = torch.full((data.num_nodes,), -1, dtype=torch.long)
         old_to_new[node_idx] = torch.arange(len(node_idx))
         edge_index_sub = old_to_new[edge_index_sub]
         
-        return Data(x=x_sub, edge_index=edge_index_sub, y=y_sub, num_nodes=len(node_idx))
+        # Handle sector mapping
+        stock_to_sector_sub = data.stock_to_sector[node_idx] if hasattr(data, 'stock_to_sector') else torch.zeros(len(node_idx), dtype=torch.long)
+        
+        # Sector edges remain the same (all sectors are always connected)
+        sector_edge_index_sub = data.sector_edge_index if hasattr(data, 'sector_edge_index') else torch.empty((2, 0), dtype=torch.long)
+        
+        subgraph = Data(
+            x=x_sub, 
+            edge_index=edge_index_sub, 
+            y=y_sub, 
+            num_nodes=len(node_idx)
+        )
+        
+        # Attach sector attributes
+        subgraph.stock_to_sector = stock_to_sector_sub
+        subgraph.sector_edge_index = sector_edge_index_sub
+        
+        return subgraph
     
     def _create_targets(self, features: pd.DataFrame, tickers: List[str]) -> torch.Tensor:
         """

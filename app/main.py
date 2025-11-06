@@ -38,6 +38,24 @@ async def lifespan(app: FastAPI):
     try:
         model_loader.load_model()
         print("✅ Model loaded successfully")
+        
+        # Pre-initialize predictor to avoid Windows pipe errors during API calls
+        print("🔧 Pre-initializing predictor...")
+        from app.core.predictor import get_predictor
+        import sys, os
+        # Suppress output during initialization
+        old_stdout, old_stderr = sys.stdout, sys.stderr
+        with open(os.devnull, 'w') as devnull:
+            sys.stdout = devnull
+            sys.stderr = devnull
+            try:
+                predictor = get_predictor()
+                predictor._ensure_initialized()
+            finally:
+                sys.stdout = old_stdout
+                sys.stderr = old_stderr
+        print("✅ Predictor pre-initialized")
+        
     except FileNotFoundError:
         print("⚠️ No trained model found")
         print("💡 Run: python scripts/train_model.py")

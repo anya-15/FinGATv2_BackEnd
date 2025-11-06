@@ -7,6 +7,7 @@ Optimizes BOTH features and model hyperparameters
 import json
 from datetime import datetime
 import os
+import sys
 import torch
 import numpy as np
 import pytorch_lightning as pl
@@ -15,6 +16,11 @@ from pytorch_lightning.loggers import CSVLogger
 import gymnasium as gym
 from gymnasium import spaces
 from stable_baselines3 import PPO
+
+# Ensure project root is on sys.path so local packages (data/, training/, etc.) can be imported
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
 
 from data.data_loader import FinancialDataset
 from training.lightning_module import FinGATLightningModule, FinGATDataModule
@@ -47,18 +53,14 @@ class HybridOptimizationEnv(gym.Env):
         self.best_features = None
         self.best_hparams = None
         
-        # State space: [73 feature flags + 5 hyperparameters]
-        # Features: 73 binary (use/don't use)
+        # State space: [feature flags + hyperparameters]
+        # Features: binary (use/don't use)
         # Hyperparams: hidden_dim (3 choices), dropout (3 choices), lr (3 choices)
-        state_size = self.num_features + 9  # 73 + 3+3+3 hyperparams
+        state_size = self.num_features + 9  # features + 3+3+3 hyperparams
         self.observation_space = spaces.MultiBinary(state_size)
         
-        # Action space: Select what to modify
-        # 0-72: Toggle features
-        # 73-75: Change hidden_dim
-        # 76-78: Change dropout
-        # 79-81: Change learning_rate
-        self.action_space = spaces.Discrete(82)
+        # Action space matches feature count plus hyperparameter options
+        self.action_space = spaces.Discrete(self.num_features + 9)
         
         self.step_count = 0
         self.max_steps = 50  # Try 50 combinations
@@ -137,32 +139,27 @@ class HybridOptimizationEnv(gym.Env):
                 'dropout': self.current_dropout,
                 'lr': self.current_lr
             }
-
         if action < self.num_features:
             # Toggle a feature
             self.selected_features[action] = 1 - self.selected_features[action]
         elif action < self.num_features + 3:
             # Change hidden_dim
             hidden_idx = action - self.num_features
-            if 0 <= hidden_idx < 3:
-                self.current_hidden_dim = [64, 128, 256][hidden_idx]
+            self.current_hidden_dim = [64, 128, 256][hidden_idx]
         elif action < self.num_features + 6:
             # Change dropout
             dropout_idx = action - (self.num_features + 3)
-            if 0 <= dropout_idx < 3:
-                self.current_dropout = [0.2, 0.3, 0.5][dropout_idx]
+            self.current_dropout = [0.2, 0.3, 0.5][dropout_idx]
         else:
             # Change learning_rate
             lr_idx = action - (self.num_features + 6)
-            if 0 <= lr_idx < 3:
-                self.current_lr = [1e-4, 5e-4, 1e-3][lr_idx]
-        
+            self.current_lr = [1e-4, 5e-4, 1e-3][lr_idx]
         # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         # EVALUATE CONFIGURATION
         # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        
+
         num_selected = self.selected_features.sum()
-        
+
         # Penalty if too few features (less than 30% of total)
         min_features = int(self.num_features * 0.3)
         if num_selected < min_features:
@@ -255,7 +252,7 @@ class HybridOptimizationEnv(gym.Env):
         config['model']['dropout'] = self.current_dropout
         config['training']['learning_rate'] = self.current_lr
         
-        # Quick training (3 epochs to save time)
+        # Quicker training (2 epochs to save time)
         model = FinGATLightningModule(config, self.metadata)
         
         data_module = FinGATDataModule(
@@ -378,15 +375,15 @@ def train_with_hybrid_rl():
         policy="MlpPolicy",
         env=env,
         learning_rate=1e-4,
-        n_steps=256,
+        n_steps=128,  # Reduced from 256
         batch_size=32,
-        n_epochs=3,
+        n_epochs=2,   # Reduced from 3
         ent_coef=0.01,
         verbose=1,
         device='auto'
     )
     
-    agent.learn(total_timesteps=2000)
+    agent.learn(total_timesteps=1000)  # Reduced from 2000
     
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     # STEP 4: FINAL TRAINING
@@ -394,134 +391,144 @@ def train_with_hybrid_rl():
     
     print("\n📊 Step 4: Final training with optimized config...")
     
-    if env.best_features is not None:
-        selected_indices = np.where(env.best_features == 1)[0]
-        best_hparams = env.best_hparams
+    # Force save artifacts even if no improvement
+    if env.best_features is None:
+        print("\n⚠️ No improvement found - using latest explored configuration")
+        env.best_features = env.selected_features.copy()
+        env.best_hparams = {
+            'hidden_dim': env.current_hidden_dim,
+            'dropout': env.current_dropout,
+            'lr': env.current_lr,
+            'num_features': int(env.selected_features.sum())
+        }
+    
+    # Proceed with final training using best or latest config
+    selected_indices = np.where(env.best_features == 1)[0]
+    best_hparams = env.best_hparams
         
-        # Mask data
-        train_data_opt = train_data.clone()
-        val_data_opt = val_data.clone()
-        test_data_opt = test_data.clone()
-        
-        train_data_opt.x = train_data_opt.x[:, selected_indices]
-        val_data_opt.x = val_data_opt.x[:, selected_indices]
-        test_data_opt.x = test_data_opt.x[:, selected_indices]
-        
-        # Update config
-        config_opt = config.copy()
-        config_opt['model']['input_dim'] = len(selected_indices)
-        config_opt['model']['hidden_dim'] = best_hparams['hidden_dim']
-        config_opt['model']['dropout'] = best_hparams['dropout']
-        config_opt['training']['learning_rate'] = best_hparams['lr']
-        config_opt['training']['max_epochs'] = 50
-        
-        final_model = FinGATLightningModule(config_opt, metadata)
-        
-        data_module_opt = FinGATDataModule(
-            config=config_opt,
-            train_data=train_data_opt,
-            val_data=val_data_opt,
-            test_data=test_data_opt,
-            metadata=metadata
-        )
-        
-        checkpoint_callback = ModelCheckpoint(
-            dirpath="checkpoints",
-            filename='fingat-hybrid-{epoch:02d}-{val_mrr:.4f}',
-            monitor='val_mrr',
-            mode='max',
-            save_top_k=3
-        )
-        
-        early_stop = EarlyStopping(
-            monitor='val_mrr',
-            patience=15,
-            mode='max'
-        )
-        
-        trainer_final = pl.Trainer(
-            max_epochs=50,
-            accelerator='auto',
-            devices='auto',
-            callbacks=[checkpoint_callback, early_stop],
-            logger=CSVLogger("logs", name="fingat-hybrid"),
-            enable_progress_bar=True,
-            gradient_clip_val=1.0
-        )
-        
-        trainer_final.fit(final_model, data_module_opt)
-        trainer_final.test(final_model, data_module_opt)
-        
-        val_results_final = trainer_final.validate(final_model, data_module_opt)
-        final_accuracy = val_results_final[0]['val_accuracy']
+    # Mask data
+    train_data_opt = train_data.clone()
+    val_data_opt = val_data.clone()
+    test_data_opt = test_data.clone()
+    
+    train_data_opt.x = train_data_opt.x[:, selected_indices]
+    val_data_opt.x = val_data_opt.x[:, selected_indices]
+    test_data_opt.x = test_data_opt.x[:, selected_indices]
+    
+    # Update config
+    config_opt = config.copy()
+    config_opt['model']['input_dim'] = len(selected_indices)
+    config_opt['model']['hidden_dim'] = best_hparams['hidden_dim']
+    config_opt['model']['dropout'] = best_hparams['dropout']
+    config_opt['training']['learning_rate'] = best_hparams['lr']
+    config_opt['training']['max_epochs'] = 30  # Reduced from 50
+    
+    final_model = FinGATLightningModule(config_opt, metadata)
+    
+    data_module_opt = FinGATDataModule(
+        config=config_opt,
+        train_data=train_data_opt,
+        val_data=val_data_opt,
+        test_data=test_data_opt,
+        metadata=metadata
+    )
+    
+    checkpoint_callback = ModelCheckpoint(
+        dirpath="checkpoints",
+        filename='fingat-hybrid-{epoch:02d}-{val_mrr:.4f}',
+        monitor='val_mrr',
+        mode='max',
+        save_top_k=3
+    )
+    
+    early_stop = EarlyStopping(
+        monitor='val_mrr',
+        patience=15,
+        mode='max'
+    )
+    
+    trainer_final = pl.Trainer(
+        max_epochs=50,
+        accelerator='auto',
+        devices='auto',
+        callbacks=[checkpoint_callback, early_stop],
+        logger=CSVLogger("logs", name="fingat-hybrid"),
+        enable_progress_bar=True,
+        gradient_clip_val=1.0
+    )
+    
+    trainer_final.fit(final_model, data_module_opt)
+    trainer_final.test(final_model, data_module_opt)
+    
+    val_results_final = trainer_final.validate(final_model, data_module_opt)
+    final_accuracy = val_results_final[0]['val_accuracy']
 
-        if env.best_features is not None and env.best_hparams is not None:
-            # 1) Save best feature mask
-            run_id = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-            save_root = os.path.join("rl_models", "hybrid", run_id)
-            os.makedirs(save_root, exist_ok=True)
+    # Always save artifacts
+    run_id = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    save_root = os.path.join("rl_models", "hybrid", run_id)
+    os.makedirs(save_root, exist_ok=True)
 
-            mask_path = os.path.join(save_root, "best_features.npy")
-            np.save(mask_path, env.best_features.astype(np.int8))
+    # 1) Save feature mask
+    mask_path = os.path.join(save_root, "best_features.npy")
+    np.save(mask_path, env.best_features.astype(np.int8))
+    print(f"✓ Saved feature mask: {mask_path}")
 
-            # 2) Save best hparams (from RL search)
-            best_hparams = {
-                "hidden_dim": env.best_hparams["hidden_dim"],
-                "dropout": env.best_hparams["dropout"],
-                "learning_rate": env.best_hparams["lr"],
-                "num_features": int(env.best_hparams["num_features"]),
-                "val_accuracy": float(final_accuracy)
-            }
-            hparams_path = os.path.join(save_root, "best_hparams.json")
-            with open(hparams_path, "w") as f:
-                json.dump(best_hparams, f, indent=2)
+    # 2) Save hyperparameters 
+    hparams = {
+        "hidden_dim": env.best_hparams["hidden_dim"],
+        "dropout": env.best_hparams["dropout"],
+        "learning_rate": env.best_hparams["lr"],
+        "num_features": int(env.best_hparams["num_features"]),
+        "val_accuracy": float(final_accuracy)
+    }
+    hparams_path = os.path.join(save_root, "best_hparams.json")
+    with open(hparams_path, "w") as f:
+        json.dump(hparams, f, indent=2)
+    print(f"✓ Saved hyperparameters: {hparams_path}")
 
-            # 3) Resolve the best checkpoint from final trainer
-            # If you still have checkpoint_callback in scope:
-            #    best_ckpt = checkpoint_callback.best_model_path
-            # Otherwise, capture it from trainer_final callbacks:
-            best_ckpt = None
-            for cb in trainer_final.callbacks:
-                if isinstance(cb, ModelCheckpoint):
-                    best_ckpt = cb.best_model_path
-                    break
-            if best_ckpt is None or not os.path.exists(best_ckpt):
-                # Fallback: pick the newest fingat-hybrid-*.ckpt
-                import glob
-                cands = glob.glob(os.path.join("checkpoints", "fingat-hybrid-*.ckpt"))
-                cands.sort(key=os.path.getmtime, reverse=True)
-                best_ckpt = cands[0] if cands else ""
+    # 3) Resolve best checkpoint path
+    best_ckpt = None
+    for cb in trainer_final.callbacks:
+        if isinstance(cb, ModelCheckpoint):
+            best_ckpt = cb.best_model_path
+            break
+    if best_ckpt is None or not os.path.exists(best_ckpt):
+        # Fallback: pick the newest checkpoint
+        import glob
+        cands = glob.glob(os.path.join("checkpoints", "fingat-hybrid-*.ckpt"))
+        cands.sort(key=os.path.getmtime, reverse=True)
+        best_ckpt = cands[0] if cands else ""
 
-            ckpt_txt = os.path.join(save_root, "best_checkpoint_path.txt")
-            with open(ckpt_txt, "w") as f:
-                f.write(best_ckpt)
+    ckpt_txt = os.path.join(save_root, "best_checkpoint_path.txt")
+    with open(ckpt_txt, "w") as f:
+        f.write(best_ckpt)
+    print(f"✓ Saved checkpoint reference: {ckpt_txt}")
 
-            # 4) Write a manifest for this run
-            manifest = {
-                "run_id": run_id,
-                "features_path": mask_path,
-                "hparams_path": hparams_path,
-                "checkpoint_path": best_ckpt,
-                "notes": "Hybrid RL: features + hparams; final 50-epoch training",
-            }
-            manifest_path = os.path.join(save_root, "manifest.json")
-            with open(manifest_path, "w") as f:
-                json.dump(manifest, f, indent=2)
+    # 4) Write run manifest
+    manifest = {
+        "run_id": run_id,
+        "features_path": mask_path,
+        "hparams_path": hparams_path,
+        "checkpoint_path": best_ckpt,
+        "notes": "Hybrid RL: features + hparams; final 50-epoch training",
+    }
+    manifest_path = os.path.join(save_root, "manifest.json")
+    with open(manifest_path, "w") as f:
+        json.dump(manifest, f, indent=2)
+    print(f"✓ Saved run manifest: {manifest_path}")
 
-            # 5) Update the global latest manifest used by predict_now.py
-            latest_dir = os.path.join("rl_models", "selected_runs")
-            os.makedirs(latest_dir, exist_ok=True)
-            latest_manifest = os.path.join(latest_dir, "latest_manifest.json")
-            with open(latest_manifest, "w") as f:
-                json.dump(manifest, f, indent=2)
+    # 5) Update global latest manifest for predict_now.py
+    latest_dir = os.path.join("rl_models", "selected_runs")
+    os.makedirs(latest_dir, exist_ok=True)
+    latest_manifest = os.path.join(latest_dir, "latest_manifest.json")
+    with open(latest_manifest, "w") as f:
+        json.dump(manifest, f, indent=2)
+    print(f"✓ Updated latest manifest: {latest_manifest}")
+    print(f"✓ Selected features: {int(env.best_features.sum())}")
+    print(f"✓ Best checkpoint: {os.path.basename(best_ckpt)}")
 
-            print(f"\n📝 Hybrid manifest written: {manifest_path}")
-            print(f"🔗 Latest manifest updated: {latest_manifest}")
-        else:
-            print("\n⚠ No best features/hparams recorded. Skipping artifact save.")
-
-    else:
-        final_accuracy = baseline_accuracy
+    # Set final accuracy value
+    final_accuracy = baseline_accuracy if not trainer_final else trainer_final.callback_metrics.get("val/accuracy", baseline_accuracy)
     
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     # RESULTS

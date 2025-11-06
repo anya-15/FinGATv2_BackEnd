@@ -131,8 +131,29 @@ checkpoints/*.pth
 
 
 # ============================================
+# RL MODELS & PREDICTIONS
+# ============================================
+# RL experiment results (can be large)
+rl_models/hybrid/
+rl_models/feature_selection/
+rl_models/hyperparameter/
+
+# Keep manifest and structure
+!rl_models/selected_runs/
+!rl_models/selected_runs/latest_manifest.json
+
+# Prediction outputs
+predictions/*.csv
+predictions/*.json
+
+# Keep folder structure
+!predictions/.gitkeep
+
+
+# ============================================
 # MISC
 # ============================================
 *.bak
 *.tmp
 .cache/
+test_*.py

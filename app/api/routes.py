@@ -421,3 +421,137 @@ async def get_utils_status():
         },
         "timestamp": datetime.now().isoformat()
     }
+
+
+@router.get("/predict/single/{ticker}")
+async def predict_single_stock(ticker: str):
+    """
+    Get prediction for a single stock from pre-generated CSV files.
+    
+    Args:
+        ticker: Stock ticker symbol (e.g., INFY, TCS, RELIANCE)
+    
+    Returns:
+        Detailed prediction with confidence, direction, rank, and trading suggestions
+    """
+    try:
+        # Import the predictor module
+        from scripts.predict_single_stock import SingleStockPredictor
+        
+        # Initialize predictor
+        try:
+            predictor = SingleStockPredictor('predictions')
+        except FileNotFoundError:
+            raise HTTPException(
+                status_code=404,
+                detail="No prediction files found. Run POST /api/v1/utils/run-predict-now first to generate predictions."
+            )
+        
+        # Get prediction
+        result = predictor.predict_stock(ticker)
+        
+        if result is None:
+            # Find similar tickers
+            all_tickers = predictor.predictions_df['Ticker'].tolist()
+            similar = [t for t in all_tickers if ticker.upper() in t][:5]
+            
+            raise HTTPException(
+                status_code=404,
+                detail=f"Ticker '{ticker.upper()}' not found. Similar tickers: {', '.join(similar) if similar else 'None'}"
+            )
+        
+        # Determine confidence strength
+        confidence = result['confidence']
+        if confidence > 50:
+            confidence_level = "VERY HIGH"
+        elif confidence > 35:
+            confidence_level = "HIGH"
+        elif confidence > 20:
+            confidence_level = "MODERATE"
+        else:
+            confidence_level = "LOW"
+        
+        # Determine quality based on rank
+        rank = result['rank']
+        
+        if rank <= 5:
+            quality = "EXCELLENT (Top 5!)"
+        elif rank <= 10:
+            quality = "EXCELLENT (Top 10!)"
+        elif rank <= 20:
+            quality = "VERY GOOD (Top 20)"
+        elif rank <= 50:
+            quality = "GOOD (Top 50)"
+        else:
+            quality = "AVERAGE"
+        
+        # Trading suggestion
+        direction = result['direction']
+        if direction == "UP" and confidence > 35 and rank <= 20:
+            suggestion = "STRONG BUY"
+            allocation = "10-15%"
+            risk_level = "LOW"
+        elif direction == "UP" and confidence > 20:
+            suggestion = "BUY"
+            allocation = "5-10%"
+            risk_level = "MODERATE"
+        elif direction == "UP":
+            suggestion = "WEAK BUY"
+            allocation = "2-5%"
+            risk_level = "HIGH"
+        elif direction == "DOWN" and confidence > 35:
+            suggestion = "STRONG SELL/AVOID"
+            allocation = "0%"
+            risk_level = "HIGH"
+        elif direction == "DOWN" and confidence > 20:
+            suggestion = "SELL/AVOID"
+            allocation = "0%"
+            risk_level = "MODERATE"
+        else:
+            suggestion = "NEUTRAL"
+            allocation = "0-2%"
+            risk_level = "HIGH"
+        
+        # Calculate expected profits for different amounts
+        expected_return = result['expected_return']
+        investment_scenarios = []
+        if direction == "UP" and rank <= 50:
+            for amount in [10000, 50000, 100000, 200000]:
+                expected_profit = amount * (expected_return / 100)
+                investment_scenarios.append({
+                    "investment": amount,
+                    "expected_profit": round(expected_profit, 2),
+                    "expected_value": round(amount + expected_profit, 2)
+                })
+        
+        return {
+            "ticker": result['ticker'],
+            "sector": result['sector'],
+            "prediction_date": predictor.prediction_date,
+            "prediction": {
+                "direction": direction,
+                "confidence_percentage": round(confidence, 2),
+                "confidence_level": confidence_level,
+                "up_probability": round(result['up_probability'], 2),
+                "expected_return_percentage": round(expected_return, 2),
+                "ranking_score": round(result['ranking_score'], 4),
+                "rank": rank,
+                "total_stocks": result['total_stocks'],
+                "quality": quality
+            },
+            "trading_suggestion": {
+                "action": suggestion,
+                "suggested_allocation": allocation,
+                "risk_level": risk_level
+            },
+            "investment_scenarios": investment_scenarios,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error getting prediction: {str(e)}"
+        )

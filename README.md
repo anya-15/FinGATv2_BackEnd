@@ -401,6 +401,243 @@ Output Heads:
 
 ---
 
+## 🔄 Feature Auto-Sync System
+
+### **Automatic Feature Synchronization**
+
+The predictor **automatically loads** the correct feature mask from the latest training run. No manual configuration needed!
+
+### **How It Works**
+
+1. **Training Phase**: RL optimization selects best features (e.g., 9 out of 14)
+2. **Saves**: Feature mask to `rl_models/hybrid/YYYY-MM-DD_HH-MM-SS/best_features.npy`
+3. **Updates**: Manifest at `rl_models/selected_runs/latest_manifest.json`
+4. **Prediction Phase**: Predictor auto-loads mask and applies to features
+
+### **Benefits**
+
+✅ **Zero Manual Configuration** - Train any model, features auto-sync  
+✅ **No Dimension Errors** - Always matches model expectations  
+✅ **Hot-Reload Capability** - Update without server restart  
+✅ **Future-Proof** - Works with any feature count  
+
+### **API Endpoint**
+
+Reload features without restarting:
+```bash
+curl -X POST http://localhost:8000/api/v1/reload-features
+```
+
+**Response:**
+```json
+{
+  "status": "success",
+  "features_selected": 9,
+  "total_features": 14,
+  "feature_mask": [false, false, true, ...]
+}
+```
+
+### **Workflow**
+
+```
+Train Model → Save Feature Mask → Update Manifest
+                                        ↓
+                            Predictor Auto-Loads
+                                        ↓
+                            Apply to Features
+                                        ↓
+                            Model Inference
+```
+
+---
+
+## 🗄️ Database Architecture
+
+### **Database Provider**
+
+- **Type**: Neon PostgreSQL (Serverless)
+- **Region**: ap-southeast-1 (Singapore)
+- **SSL**: Required
+- **Connection Pooling**: 5 connections, 10 max overflow
+
+### **Database Tables (5 Total)**
+
+#### **1. stocks** - Stock Metadata
+```sql
+CREATE TABLE stocks (
+    id SERIAL PRIMARY KEY,
+    ticker VARCHAR(20) UNIQUE NOT NULL,
+    company_name VARCHAR(255) NOT NULL,
+    sector VARCHAR(100),
+    current_price FLOAT,
+    market_cap FLOAT,
+    exchange VARCHAR(10) DEFAULT 'NSE',
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP
+);
+```
+
+**Records**: 148 stocks  
+**Usage**: Store company info, sector classification, current prices
+
+#### **2. predictions** - Historical Predictions
+```sql
+CREATE TABLE predictions (
+    id SERIAL PRIMARY KEY,
+    ticker VARCHAR(20) NOT NULL,
+    predicted_return FLOAT NOT NULL,
+    predicted_movement VARCHAR(10) NOT NULL,  -- 'up' or 'down'
+    movement_confidence FLOAT NOT NULL,
+    ranking_score FLOAT NOT NULL,
+    rank INTEGER,
+    model_checkpoint VARCHAR(255),
+    model_version VARCHAR(50),
+    sector VARCHAR(100),
+    prediction_date TIMESTAMP DEFAULT NOW(),
+    
+    -- Backtesting support
+    actual_return FLOAT,
+    actual_movement VARCHAR(10),
+    outcome_date TIMESTAMP,
+    is_correct INTEGER  -- 1=correct, 0=incorrect, NULL=pending
+);
+```
+
+**Auto-Saving**: ✅ Every prediction is automatically saved  
+**Purpose**: Track predictions, backtest accuracy, analyze patterns
+
+#### **3. training_history** - Training Runs
+```sql
+CREATE TABLE training_history (
+    id SERIAL PRIMARY KEY,
+    run_id VARCHAR(100) UNIQUE NOT NULL,
+    training_type VARCHAR(50) NOT NULL,
+    model_architecture VARCHAR(50),
+    hidden_dim INTEGER,
+    num_layers INTEGER,
+    learning_rate FLOAT,
+    
+    -- Metrics
+    val_accuracy FLOAT,
+    val_mrr FLOAT,
+    test_accuracy FLOAT,
+    
+    -- RL Feature Selection
+    num_features_selected INTEGER,
+    total_features INTEGER,
+    feature_mask_path VARCHAR(500),
+    
+    -- Timing
+    training_duration_minutes FLOAT,
+    started_at TIMESTAMP,
+    completed_at TIMESTAMP,
+    status VARCHAR(20)  -- 'running', 'completed', 'failed'
+);
+```
+
+**Purpose**: Track all training experiments, compare configurations
+
+#### **4. model_checkpoints** - Checkpoint Catalog
+```sql
+CREATE TABLE model_checkpoints (
+    id SERIAL PRIMARY KEY,
+    checkpoint_name VARCHAR(255) UNIQUE NOT NULL,
+    checkpoint_path VARCHAR(500) NOT NULL,
+    model_type VARCHAR(50),
+    training_run_id VARCHAR(100),
+    epoch INTEGER,
+    val_mrr FLOAT,
+    file_size_mb FLOAT,
+    is_active INTEGER DEFAULT 0,
+    is_best INTEGER DEFAULT 0,
+    created_at TIMESTAMP
+);
+```
+
+**Purpose**: Catalog all saved models, track performance, manage active models
+
+#### **5. system_metrics** - Performance Monitoring
+```sql
+CREATE TABLE system_metrics (
+    id SERIAL PRIMARY KEY,
+    metric_type VARCHAR(50) NOT NULL,
+    metric_name VARCHAR(100) NOT NULL,
+    value FLOAT NOT NULL,
+    unit VARCHAR(20),
+    endpoint VARCHAR(100),
+    model_version VARCHAR(50),
+    recorded_at TIMESTAMP DEFAULT NOW()
+);
+```
+
+**Purpose**: Monitor API latency, prediction accuracy, system health
+
+### **Database Connection**
+
+**File**: `app/db/database.py`
+
+```python
+engine = create_engine(
+    settings.DATABASE_URL,
+    pool_size=5,
+    max_overflow=10,
+    pool_pre_ping=True
+)
+```
+
+**Environment Variable** (`.env`):
+```bash
+DATABASE_URL=postgresql://user:pass@host/database?sslmode=require
+```
+
+### **Auto-Initialization**
+
+Tables are automatically created on server startup:
+```python
+# In app/main.py
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_db()  # Creates all 5 tables
+    ...
+```
+
+### **Usage Examples**
+
+**Query Predictions:**
+```python
+from app.db.database import SessionLocal
+from app.db.models import Prediction
+
+db = SessionLocal()
+predictions = db.query(Prediction).filter(
+    Prediction.prediction_date >= datetime.now().date()
+).all()
+print(f"Made {len(predictions)} predictions today")
+db.close()
+```
+
+**Query Training History:**
+```python
+from app.db.models import TrainingHistory
+
+recent_runs = db.query(TrainingHistory).filter(
+    TrainingHistory.status == 'completed'
+).order_by(TrainingHistory.val_mrr.desc()).limit(5).all()
+```
+
+**Check System Metrics:**
+```python
+from app.db.models import SystemMetrics
+
+avg_latency = db.query(func.avg(SystemMetrics.value)).filter(
+    SystemMetrics.metric_type == 'api_latency',
+    SystemMetrics.recorded_at >= datetime.now() - timedelta(hours=24)
+).scalar()
+```
+
+---
+
 ## 📝 License
 
 MIT License - Free for research and commercial use.

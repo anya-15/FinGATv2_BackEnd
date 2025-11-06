@@ -18,9 +18,9 @@ from contextlib import redirect_stdout, redirect_stderr
 sys.path.append(str(Path(__file__).parent.parent.parent))
 
 from app.core.model_loader import model_loader
-from app.db.models import Stock
 from app.config import settings
 from data.data_loader import FinancialDataset
+from app.db.models import Stock, Prediction
 
 # Setup logger
 logger = logging.getLogger(__name__)
@@ -210,7 +210,7 @@ class TopKPredictor:
                     latest_price = float(stock.current_price) if stock and stock.current_price else 0.0
             else:
                 latest_price = float(stock.current_price) if stock and stock.current_price else 0.0
-            results.append({
+            result_dict = {
                 "rank": rank,
                 "ticker": ticker,
                 "company_name": company_name,
@@ -222,8 +222,52 @@ class TopKPredictor:
                 "ranking_score": round(ranking_score, 3),
                 "predicted_return": round(predicted_return, 4),
                 "sector": stock.sector if stock else "Unknown"
-            })
+            }
+            results.append(result_dict)
+            
+            # Save prediction to database
+            if db:
+                self._save_prediction_to_db(db, result_dict)
+        
         return results
+    
+    def _save_prediction_to_db(self, db: Session, prediction_data: Dict):
+        """Save a single prediction to the database"""
+        try:
+            # Get model checkpoint info
+            checkpoint_path = None
+            model_version = None
+            try:
+                import json
+                manifest_path = Path(__file__).parent.parent.parent / 'rl_models' / 'selected_runs' / 'latest_manifest.json'
+                if manifest_path.exists():
+                    with open(manifest_path, 'r') as f:
+                        manifest = json.load(f)
+                    checkpoint_path = manifest.get('checkpoint_path', '')
+                    if checkpoint_path:
+                        checkpoint_path = Path(checkpoint_path).name  # Just the filename
+                    model_version = manifest.get('run_id', 'unknown')
+            except:
+                pass
+            
+            prediction = Prediction(
+                ticker=prediction_data['ticker'],
+                predicted_return=prediction_data['predicted_return'],
+                predicted_movement=prediction_data['predicted_movement'],
+                movement_confidence=prediction_data['confidence_score'],
+                ranking_score=prediction_data['ranking_score'],
+                rank=prediction_data['rank'],
+                model_checkpoint=checkpoint_path,
+                model_version=model_version,
+                sector=prediction_data['sector']
+            )
+            
+            db.add(prediction)
+            db.commit()
+            logger.debug(f"Saved prediction for {prediction_data['ticker']} to database")
+        except Exception as e:
+            logger.error(f"Error saving prediction to database: {e}")
+            db.rollback()
 
     def _get_sector_mask(self, data: Data, metadata: Dict, sector: str, db: Optional[Session]) -> torch.Tensor:
         num_stocks = data.num_nodes

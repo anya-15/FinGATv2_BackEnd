@@ -53,7 +53,7 @@ def init_db():
     
     Call this on app startup
     """
-    from app.db.models import Stock  # Import models
+    from app.db.models import Stock, Prediction, TrainingHistory, ModelCheckpoint, SystemMetrics  # Import all models
     
     try:
         Base.metadata.create_all(bind=engine)

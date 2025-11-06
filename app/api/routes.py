@@ -245,3 +245,179 @@ async def reload_feature_mask():
             status_code=500,
             detail=f"Failed to reload feature mask: {str(e)}"
         )
+
+
+# ====================
+# UTILITY ROUTES
+# ====================
+
+@router.post("/utils/train")
+async def trigger_training(background_tasks: BackgroundTasks):
+    """
+    Trigger model training with RL optimization.
+    This runs the full training pipeline in the background.
+    """
+    try:
+        def run_training():
+            import subprocess
+            import sys
+            result = subprocess.run(
+                [sys.executable, "scripts/train_with_hybrid_rl.py"],
+                capture_output=True,
+                text=True,
+                timeout=3600  # 1 hour timeout
+            )
+            if result.returncode != 0:
+                logger.error(f"Training failed: {result.stderr}")
+            else:
+                logger.info(f"Training completed: {result.stdout}")
+        
+        background_tasks.add_task(run_training)
+        return {
+            "status": "started",
+            "message": "Training initiated in background",
+            "note": "This may take 30-60 minutes. Check logs for progress.",
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to start training: {str(e)}"
+        )
+
+
+@router.post("/utils/populate-db")
+async def populate_database(background_tasks: BackgroundTasks):
+    """
+    Populate database with stock metadata and predictions.
+    Runs the populate_db.py script.
+    """
+    try:
+        def run_populate():
+            import subprocess
+            import sys
+            result = subprocess.run(
+                [sys.executable, "scripts/populate_db.py"],
+                capture_output=True,
+                text=True,
+                timeout=300  # 5 minutes timeout
+            )
+            if result.returncode != 0:
+                logger.error(f"Populate DB failed: {result.stderr}")
+            else:
+                logger.info(f"Populate DB completed: {result.stdout}")
+        
+        background_tasks.add_task(run_populate)
+        return {
+            "status": "started",
+            "message": "Database population initiated",
+            "note": "Check logs for progress",
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to populate database: {str(e)}"
+        )
+
+
+@router.post("/utils/update-data")
+async def update_stock_data(background_tasks: BackgroundTasks):
+    """
+    Update stock data CSVs with latest market data.
+    Runs the update_data.py script.
+    """
+    try:
+        def run_update():
+            import subprocess
+            import sys
+            result = subprocess.run(
+                [sys.executable, "scripts/update_data.py"],
+                capture_output=True,
+                text=True,
+                timeout=600  # 10 minutes timeout
+            )
+            if result.returncode != 0:
+                logger.error(f"Update data failed: {result.stderr}")
+            else:
+                logger.info(f"Update data completed: {result.stdout}")
+        
+        background_tasks.add_task(run_update)
+        return {
+            "status": "started",
+            "message": "Data update initiated",
+            "note": "Fetching latest stock data. Check logs for progress.",
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to update data: {str(e)}"
+        )
+
+
+@router.post("/utils/run-predict-now")
+async def run_predict_now_script(background_tasks: BackgroundTasks):
+    """
+    Run the full predict_now.py script to generate prediction CSVs.
+    This creates top5, top10, top20 prediction files.
+    """
+    try:
+        def run_script():
+            import subprocess
+            import sys
+            result = subprocess.run(
+                [sys.executable, "predict_now.py"],
+                capture_output=True,
+                text=True,
+                timeout=300  # 5 minutes timeout
+            )
+            if result.returncode != 0:
+                logger.error(f"Predict now script failed: {result.stderr}")
+            else:
+                logger.info(f"Predict now completed: {result.stdout}")
+        
+        background_tasks.add_task(run_script)
+        return {
+            "status": "started",
+            "message": "Prediction script initiated",
+            "note": "Generating prediction CSVs. Check predictions/ folder.",
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to run predict_now script: {str(e)}"
+        )
+
+
+@router.get("/utils/status")
+async def get_utils_status():
+    """
+    Get status of utility scripts and data files.
+    """
+    import os
+    from pathlib import Path
+    
+    # Check if scripts exist
+    scripts_status = {
+        "train_script": os.path.exists("scripts/train_with_hybrid_rl.py"),
+        "populate_script": os.path.exists("scripts/populate_db.py"),
+        "update_script": os.path.exists("scripts/update_data.py"),
+        "predict_script": os.path.exists("predict_now.py")
+    }
+    
+    # Check data folders
+    csv_count = len(list(Path("indian_data").glob("*.csv"))) if Path("indian_data").exists() else 0
+    prediction_count = len(list(Path("predictions").glob("*.csv"))) if Path("predictions").exists() else 0
+    checkpoint_count = len(list(Path("checkpoints").glob("*.ckpt"))) if Path("checkpoints").exists() else 0
+    
+    return {
+        "scripts": scripts_status,
+        "data": {
+            "csv_files": csv_count,
+            "prediction_files": prediction_count,
+            "checkpoints": checkpoint_count
+        },
+        "timestamp": datetime.now().isoformat()
+    }

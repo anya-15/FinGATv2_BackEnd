@@ -171,16 +171,42 @@ python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
 ## 🔌 API Endpoints
 
-### **✅ VERIFIED WORKING**
+### **📊 Core Predictions**
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/predict/now` | GET | Full batch predictions for all stocks |
+| `/predict/top-k?k=10` | GET | Get top-K stock recommendations |
+| `/predict/single/{ticker}` | GET | Get prediction for a single stock |
 
-| Endpoint | Method | Description | Status |
-|----------|--------|-------------|--------|
-| `/` | GET | API information | ✅ Working |
-| `/api/v1/health` | GET | Health check | ✅ Working |
-| `/api/v1/predict/now` | GET | Batch predictions (147 stocks) | ✅ Working |
-| `/api/v1/predict/top-k?k=10` | GET | Top-K recommendations | ✅ Working |
-| `/api/v1/sectors` | GET | List all sectors | ✅ Working |
-| `/docs` | GET | Interactive API docs | ✅ Working |
+### **📈 Model Management**
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/model/info` | GET | Get model configuration and metadata |
+| `/model/status` | GET | Check model training status |
+| `/retrain` | POST | Trigger model retraining |
+| `/reload-features` | POST | Reload feature mask from latest run |
+
+### **📚 Data & Sectors**
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/sectors` | GET | List all available sectors |
+| `/stocks` | GET | List all stocks with filters |
+
+### **⚙️ Utility Endpoints**
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/utils/train` | POST | Trigger model training with RL |
+| `/utils/populate-db` | POST | Populate database with stock data |
+| `/utils/update-data` | POST | Update stock data CSVs |
+| `/utils/run-predict-now` | POST | Generate prediction CSVs |
+| `/utils/status` | GET | Check status of utility scripts |
+
+### **System**
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/health` | GET | Health check |
+| `/docs` | GET | Interactive API docs (Swagger UI) |
+| `/redoc` | GET | Alternative API docs (ReDoc) |
 
 ### **Example: Get Top 5 Predictions**
 

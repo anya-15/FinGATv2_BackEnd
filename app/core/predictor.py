@@ -34,6 +34,9 @@ class TopKPredictor:
         self._initialized = False
         self.feature_mask = None  # Cache for RL feature mask
         self._feature_mask_loaded = False
+        self._cached_data = None  # Cache prepared dataset
+        self._cached_metadata = None  # Cache dataset metadata
+        self._cache_timestamp = None  # Track when cache was created
 
     def _ensure_initialized(self):
         if self._initialized:
@@ -102,7 +105,7 @@ class TopKPredictor:
             self._feature_mask_loaded = True
             
             num_selected = int(feature_mask.sum())
-            logger.info(f"✅ Loaded RL feature mask: {num_selected}/{len(feature_mask)} features selected")
+            logger.info(f"[OK] Loaded RL feature mask: {num_selected}/{len(feature_mask)} features selected")
             logger.info(f"   Mask: {feature_mask.tolist()}")
             
         except Exception as e:
@@ -117,7 +120,7 @@ class TopKPredictor:
         self._feature_mask_loaded = False
         self.feature_mask = None
         self._load_feature_mask()
-        logger.info("🔄 Feature mask reloaded from latest training run")
+        logger.info("[*] Feature mask reloaded from latest training run")
 
     @torch.no_grad()
     def predict_top_k(
@@ -126,29 +129,47 @@ class TopKPredictor:
         self._ensure_initialized()
         if not self._initialized:
             try:
-                logger.info("🔄 Initializing predictor...")
+                logger.info("[*] Initializing predictor...")
                 self.model, self.metadata = model_loader.get_model()
-                logger.info(f"✅ Model loaded: {type(self.model)}")
+                logger.info(f"[OK] Model loaded: {type(self.model)}")
                 self.data_loader = FinancialDataset(
                     csv_folder_path=settings.DATA_PATH,
                     max_stocks=550
                 )
-                logger.info(f"✅ Data loader initialized for path: {settings.DATA_PATH}")
+                logger.info(f"[OK] Data loader initialized for path: {settings.DATA_PATH}")
                 self._initialized = True
             except Exception as e:
-                logger.error(f"❌ Cannot initialize predictor: {e}")
+                logger.error(f"[ERROR] Cannot initialize predictor: {e}")
                 import traceback
                 logger.error(traceback.format_exc())
                 return []
         try:
-            # Suppress stdout/stderr during data preparation to avoid Windows pipe errors
-            logger.info("📊 Preparing dataset...")
-            with open(os.devnull, 'w') as devnull:
-                with redirect_stdout(devnull), redirect_stderr(devnull):
-                    data, metadata = self.data_loader.prepare_dataset()
-            logger.info(f"✅ Dataset prepared: {data.x.shape[0]} stocks, {data.x.shape[1]} features")
+            # Use cached dataset if available (cache for 5 minutes)
+            import time
+            current_time = time.time()
+            cache_duration = 5 * 60  # 5 minutes
+            
+            if (self._cached_data is not None and 
+                self._cache_timestamp is not None and 
+                (current_time - self._cache_timestamp) < cache_duration):
+                # Use cached data
+                data = self._cached_data
+                metadata = self._cached_metadata
+                logger.info(f"[CACHE] Using cached dataset ({data.x.shape[0]} stocks)")
+            else:
+                # Load fresh data
+                logger.info("[*] Preparing dataset...")
+                with open(os.devnull, 'w') as devnull:
+                    with redirect_stdout(devnull), redirect_stderr(devnull):
+                        data, metadata = self.data_loader.prepare_dataset()
+                
+                # Cache the data
+                self._cached_data = data
+                self._cached_metadata = metadata
+                self._cache_timestamp = current_time
+                logger.info(f"[OK] Dataset prepared and cached: {data.x.shape[0]} stocks, {data.x.shape[1]} features")
         except Exception as e:
-            logger.error(f"❌ Error preparing dataset: {e}")
+            logger.error(f"[ERROR] Error preparing dataset: {e}")
             import traceback
             logger.error(traceback.format_exc())
             return []

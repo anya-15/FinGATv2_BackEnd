@@ -9,6 +9,7 @@ import os
 import glob
 import sys
 from pathlib import Path
+from difflib import get_close_matches
 
 # Add project root to path
 project_root = Path(__file__).parent.parent
@@ -23,8 +24,11 @@ class SingleStockPredictor:
         print("🔮 Loading Stock Predictions...")
         print("="*60)
         
-        # Find latest prediction file
+        # Find latest prediction file (try multiple patterns)
         csv_files = glob.glob(f"{predictions_folder}/predictions_*.csv")
+        if not csv_files:
+            # Try alternative pattern (up_only, top20, etc.)
+            csv_files = glob.glob(f"{predictions_folder}/*_20*.csv")
         
         if not csv_files:
             print(f"❌ ERROR: No prediction files found in '{predictions_folder}/'")
@@ -41,6 +45,10 @@ class SingleStockPredictor:
         # Load predictions
         self.predictions_df = pd.read_csv(self.latest_file)
         
+        # Add Rank column if not present
+        if 'Rank' not in self.predictions_df.columns:
+            self.predictions_df['Rank'] = range(1, len(self.predictions_df) + 1)
+        
         print(f"✅ Loaded predictions from: {filename}")
         print(f"📅 Prediction date: {self.prediction_date}")
         print(f"📊 Total stocks: {len(self.predictions_df)}")
@@ -55,16 +63,22 @@ class SingleStockPredictor:
         
         if stock_data.empty:
             print(f"\n❌ ERROR: Ticker '{ticker}' not found in predictions!")
-            print(f"\n💡 Did you mean one of these?")
             
-            # Find similar tickers
+            # Fuzzy search for similar tickers
             all_tickers = self.predictions_df['Ticker'].tolist()
-            similar = [t for t in all_tickers if ticker in t]
+            similar = get_close_matches(ticker, all_tickers, n=5, cutoff=0.6)
             
             if similar:
-                print(f"   {', '.join(similar[:5])}")
+                print(f"\n💡 Did you mean one of these?")
+                print(f"   {', '.join(similar)}")
             else:
-                print(f"   Type 'list' to see all available stocks")
+                # Fallback to substring search
+                substring_matches = [t for t in all_tickers if ticker in t][:5]
+                if substring_matches:
+                    print(f"\n💡 Stocks containing '{ticker}':")
+                    print(f"   {', '.join(substring_matches)}")
+                else:
+                    print(f"\n💡 Type 'list' to see all available stocks")
             
             return None
         
@@ -72,15 +86,15 @@ class SingleStockPredictor:
         stock = stock_data.iloc[0]
         
         return {
-            'ticker': stock['Ticker'],
-            'sector': stock['Sector'],
-            'direction': stock['Direction'],
-            'confidence': stock['Confidence_%'],
-            'up_probability': stock['UP_Probability'] * 100,
-            'expected_return': stock['Expected_Return_%'],
-            'ranking_score': stock['Ranking_Score'],
-            'rank': stock['Rank'],
-            'total_stocks': len(self.predictions_df)
+            'ticker': str(stock['Ticker']),
+            'sector': str(stock['Sector']),
+            'direction': str(stock['Direction']),
+            'confidence': float(stock['Confidence_%']),
+            'up_probability': float(stock['UP_Probability']) * 100,
+            'expected_return': float(stock['Expected_Return_%']),
+            'ranking_score': float(stock['Ranking_Score']),
+            'rank': int(stock['Rank']),
+            'total_stocks': int(len(self.predictions_df))
         }
     
     def display_prediction(self, result):
@@ -199,16 +213,81 @@ class SingleStockPredictor:
     def show_top_picks(self, n=10):
         """Show top N stock picks"""
         print(f"\n🏆 TOP {n} STOCK PICKS:")
-        print("="*60)
+        print("="*80)
+        print(f"{'Rank':<6} {'Ticker':<12} {'Dir':<5} {'Conf':<8} {'Return':<10} {'Sector':<20}")
+        print("-"*80)
         
         top_stocks = self.predictions_df.head(n)
         
         for idx, row in top_stocks.iterrows():
             direction_emoji = "⬆️" if row['Direction'] == "UP" else "⬇️"
-            print(f"#{row['Rank']:2d}. {row['Ticker']:<12} {direction_emoji} {row['Direction']:<5} "
-                  f"Conf: {row['Confidence_%']:5.1f}%  Return: {row['Expected_Return_%']:6.2f}%  "
-                  f"Sector: {row['Sector']}")
+            conf_bar = "█" * int(row['Confidence_%'] / 10)
+            print(f"#{row['Rank']:<5d} {row['Ticker']:<12} {direction_emoji} {row['Direction']:<3} "
+                  f"{row['Confidence_%']:5.1f}%  {row['Expected_Return_%']:+6.2f}%    {row['Sector']:<20}")
         
+        print("="*80 + "\n")
+    
+    def filter_by_sector(self, sector):
+        """Show stocks from a specific sector"""
+        sector_stocks = self.predictions_df[
+            self.predictions_df['Sector'].str.contains(sector, case=False, na=False)
+        ].head(20)
+        
+        if sector_stocks.empty:
+            print(f"\n❌ No stocks found in sector: {sector}")
+            print("\n💡 Available sectors:")
+            sectors = sorted(self.predictions_df['Sector'].unique())
+            for s in sectors:
+                count = len(self.predictions_df[self.predictions_df['Sector'] == s])
+                print(f"   • {s} ({count} stocks)")
+            return
+        
+        print(f"\n📊 STOCKS IN {sector.upper()} SECTOR:")
+        print("="*80)
+        print(f"{'Rank':<6} {'Ticker':<12} {'Dir':<5} {'Conf':<8} {'Return':<10}")
+        print("-"*80)
+        
+        for idx, row in sector_stocks.iterrows():
+            direction_emoji = "⬆️" if row['Direction'] == "UP" else "⬇️"
+            print(f"#{row['Rank']:<5d} {row['Ticker']:<12} {direction_emoji} {row['Direction']:<3} "
+                  f"{row['Confidence_%']:5.1f}%  {row['Expected_Return_%']:+6.2f}%")
+        
+        print("="*80 + "\n")
+    
+    def compare_stocks(self, tickers):
+        """Compare multiple stocks side by side"""
+        print(f"\n📊 STOCK COMPARISON:")
+        print("="*100)
+        print(f"{'Ticker':<12} {'Sector':<20} {'Dir':<5} {'Conf':<8} {'Return':<10} {'Rank':<8}")
+        print("-"*100)
+        
+        for ticker in tickers:
+            ticker = ticker.upper().strip()
+            stock_data = self.predictions_df[self.predictions_df['Ticker'] == ticker]
+            
+            if stock_data.empty:
+                print(f"{ticker:<12} ❌ Not found")
+                continue
+            
+            row = stock_data.iloc[0]
+            direction_emoji = "⬆️" if row['Direction'] == "UP" else "⬇️"
+            print(f"{row['Ticker']:<12} {row['Sector']:<20} {direction_emoji} {row['Direction']:<3} "
+                  f"{row['Confidence_%']:5.1f}%  {row['Expected_Return_%']:+6.2f}%    #{row['Rank']:<6d}")
+        
+        print("="*100 + "\n")
+    
+    def show_sectors(self):
+        """Show all available sectors with stock counts"""
+        print("\n📊 AVAILABLE SECTORS:")
+        print("="*60)
+        
+        sector_counts = self.predictions_df['Sector'].value_counts()
+        
+        for sector, count in sector_counts.items():
+            print(f"   • {sector:<30} ({count:2d} stocks)")
+        
+        print("="*60)
+        print(f"Total sectors: {len(sector_counts)}")
         print("="*60 + "\n")
 
 
@@ -250,7 +329,11 @@ def main():
     print("\n💡 COMMANDS:")
     print("   • Type stock ticker (e.g., INFY, TCS, RELIANCE)")
     print("   • Type 'list' to see all available stocks")
-    print("   • Type 'top' or 'top10' to see top picks")
+    print("   • Type 'top' or 'top5/top10/top20' to see top picks")
+    print("   • Type 'sectors' to see all sectors")
+    print("   • Type 'sector:<name>' to filter by sector (e.g., sector:tech)")
+    print("   • Type 'compare:<ticker1>,<ticker2>,...' to compare stocks")
+    print("   • Type 'help' to see this menu again")
     print("   • Type 'exit' or 'quit' to close")
     print("-"*60 + "\n")
     
@@ -268,9 +351,40 @@ def main():
             if not command:
                 continue
             
+            # Check for help command
+            if command.lower() == 'help':
+                print("\n💡 AVAILABLE COMMANDS:")
+                print("   • <ticker>           - Get prediction for a stock")
+                print("   • list               - List all available stocks")
+                print("   • top/top5/top10/top20 - Show top stock picks")
+                print("   • sectors            - Show all sectors")
+                print("   • sector:<name>      - Filter by sector (e.g., sector:tech)")
+                print("   • compare:<t1>,<t2>  - Compare stocks (e.g., compare:INFY,TCS)")
+                print("   • help               - Show this menu")
+                print("   • exit/quit          - Exit program\n")
+                continue
+            
             # Check for list command
             if command.lower() == 'list':
                 predictor.list_stocks()
+                continue
+            
+            # Check for sectors command
+            if command.lower() == 'sectors':
+                predictor.show_sectors()
+                continue
+            
+            # Check for sector filter
+            if command.lower().startswith('sector:'):
+                sector = command.split(':', 1)[1].strip()
+                predictor.filter_by_sector(sector)
+                continue
+            
+            # Check for compare command
+            if command.lower().startswith('compare:'):
+                tickers_str = command.split(':', 1)[1]
+                tickers = [t.strip() for t in tickers_str.split(',')]
+                predictor.compare_stocks(tickers)
                 continue
             
             # Check for top command

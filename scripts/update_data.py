@@ -8,6 +8,12 @@ import pandas as pd
 from pathlib import Path
 from datetime import datetime, timedelta
 import sys
+import time
+import warnings
+
+# Suppress yfinance warnings
+warnings.filterwarnings('ignore')
+yf.set_tz_cache_location(None)
 
 # Add project root to path
 sys.path.append(str(Path(__file__).parent.parent))
@@ -46,8 +52,9 @@ def update_indian_stocks():
     updated_count = 0
     failed_count = 0
     no_data_count = 0
+    total_files = len(stock_files)
     
-    for csv_file in stock_files:
+    for idx, csv_file in enumerate(stock_files, 1):
         ticker = csv_file.stem
         
         try:
@@ -66,10 +73,10 @@ def update_indian_stocks():
             ticker_symbols = [f"{ticker}.NS", f"{ticker}.BO"]
             
             new_data = None
+            success_symbol = None
+            
             for symbol in ticker_symbols:
                 try:
-                    print(f"Updating {ticker} ({symbol})...", end=" ")
-                    
                     stock = yf.Ticker(symbol)
                     new_data = stock.history(
                         start=last_date + timedelta(days=1),
@@ -77,8 +84,11 @@ def update_indian_stocks():
                     )
                     
                     if len(new_data) > 0:
-                        break  # Found data
-                except:
+                        success_symbol = symbol
+                        break  # Found data, exit symbol loop
+                        
+                except Exception:
+                    # Try next symbol
                     continue
             
             if new_data is not None and len(new_data) > 0:
@@ -96,14 +106,14 @@ def update_indian_stocks():
                 updated_df.drop_duplicates(subset=['Date'], keep='last', inplace=True)
                 updated_df.to_csv(csv_file, index=False)
                 
-                print(f"✅ Added {len(new_data)} rows")
+                print(f"[{idx}/{total_files}] ✅ {ticker:15s} ({success_symbol:15s}) +{len(new_data)} rows")
                 updated_count += 1
             else:
-                print("⏭️ No new data")
+                print(f"[{idx}/{total_files}] ⏭️  {ticker:15s} - No new data")
                 no_data_count += 1
         
         except Exception as e:
-            print(f"❌ Failed: {e}")
+            print(f"[{idx}/{total_files}] ❌ {ticker:15s} - Error: {str(e)[:30]}")
             failed_count += 1
     
     print("\n" + "=" * 60)

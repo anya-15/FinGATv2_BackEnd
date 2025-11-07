@@ -628,24 +628,24 @@ class FinGATLightningModule(pl.LightningModule):
         tickers = list(self.metadata['ticker_to_idx'].keys())
         
         print("\n" + "="*80)
-        print("🏆 TOP-K STOCK RECOMMENDATIONS")
+        print("[*] TOP-K STOCK RECOMMENDATIONS")
         print("="*80)
         
         up_count = (all_movement_pred == 1).sum().item()
         down_count = (all_movement_pred == 0).sum().item()
-        print(f"\n📊 Prediction Balance:")
+        print(f"\n[*] Prediction Balance:")
         print(f"   UP: {up_count} ({up_count/(up_count+down_count)*100:.1f}%)")
         print(f"   DOWN: {down_count} ({down_count/(up_count+down_count)*100:.1f}%)")
         
         for k in [5, 10]:
             k_actual = min(k, len(all_ranking_scores))
             if k_actual > 0:
-                print(f"\n📊 **TOP-{k} RECOMMENDED STOCKS:**")
+                print(f"\n[*] **TOP-{k} RECOMMENDED STOCKS:**")
                 print("-"*70)
                 
                 top_k_indices = torch.topk(all_ranking_scores, k=k_actual).indices
                 
-                print(f"{ 'Rank':<4} {'Ticker':<8} {'Pred Dir':<8} {'Act Dir':<8} {'Pred Ret':<10} {'Act Ret':<10} {'Score':<8} {'✓'}")
+                print(f"{ 'Rank':<4} {'Ticker':<8} {'Pred Dir':<8} {'Act Dir':<8} {'Pred Ret':<10} {'Act Ret':<10} {'Score':<8} {'OK'}")
                 print("-"*70)
                 
                 for i, idx in enumerate(top_k_indices):
@@ -655,7 +655,7 @@ class FinGATLightningModule(pl.LightningModule):
                     ranking_score = f"{all_ranking_scores[idx].item():.3f}"
                     actual_direction = "UP" if all_movement_target[idx] == 1 else "DOWN"
                     actual_return = f"{all_returns_target[idx].item():.3f}"
-                    dir_correct = "✅" if pred_direction == actual_direction else "❌"
+                    dir_correct = "[OK]" if pred_direction == actual_direction else "[X]"
                     
                     print(f"{i+1:<4} {ticker:<8} {pred_direction:<8} {actual_direction:<8} {pred_return:<10} {actual_return:<10} {ranking_score:<8} {dir_correct}")
     

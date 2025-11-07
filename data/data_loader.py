@@ -76,7 +76,7 @@ class FinancialDataCollector:
                     continue
                 
                 all_data[ticker] = df
-                print(f"✓ Loaded {ticker}: {len(df)} rows")
+                print(f"[OK] Loaded {ticker}: {len(df)} rows")
                 
             except Exception as e:
                 print(f"Error loading {filename}: {e}")
@@ -203,7 +203,7 @@ class FinancialDataCollector:
             sectors[ticker] = sector
             sector_counts[sector] = sector_counts.get(sector, 0) + 1
         
-        print("\n🇮🇳 Indian Stock Market Sector Distribution:")
+        print("\n[*] Indian Stock Market Sector Distribution:")
         print("=" * 60)
         for sector, count in sorted(sector_counts.items()):
             print(f"  {sector}: {count} stocks")
@@ -258,7 +258,7 @@ class FinancialFeatureEngineer:
                 else:
                     features[f'{ticker}_volume_ratio'] = pd.Series(1.0, index=close_prices.index)
                 
-                print(f"✓ Created features for {ticker}")
+                print(f"[OK] Created features for {ticker}")
                 
             except Exception as e:
                 print(f"Error creating features for {ticker}: {e}")
@@ -280,7 +280,7 @@ class FinancialFeatureEngineer:
         node_features = []
         ticker_to_idx = {ticker: idx for idx, ticker in enumerate(tickers)}
         
-        print("\n🚀 LEAK-FREE Feature Extraction:")
+        print("\n[*] LEAK-FREE Feature Extraction:")
         print("=" * 60)
         
         for ticker in tickers:
@@ -295,12 +295,12 @@ class FinancialFeatureEngineer:
                 
                 if len(node_features) == 0:
                     print(f"Example: {ticker}")
-                    print(f"  ✅ Feature window: Days -60 to -11 (50 days)")
-                    print(f"  ✅ Buffer: Days -10 to -6 (5 days, not used)")
-                    print(f"  ✅ Target: Days -5 to -1 (5 days)")
-                    print(f"  ✅ NO OVERLAP - NO LEAKAGE!")
+                    print(f"  [OK] Feature window: Days -60 to -11 (50 days)")
+                    print(f"  [OK] Buffer: Days -10 to -6 (5 days, not used)")
+                    print(f"  [OK] Target: Days -5 to -1 (5 days)")
+                    print(f"  [OK] NO OVERLAP - NO LEAKAGE!")
                     print(f"  Features: {len(ticker_mean)} mean + {len(ticker_std)} std = {len(ticker_features)} total")
-                    print(f"  ✅ NO SECTOR ENCODING (checkpoint doesn't use it)")
+                    print(f"  [OK] NO SECTOR ENCODING (checkpoint doesn't use it)")
             else:
                 ticker_features = np.zeros(len(ticker_cols) * 2)
             
@@ -337,7 +337,7 @@ class FinancialFeatureEngineer:
         else:
             edge_index = torch.empty((2, 0), dtype=torch.long)
         
-        print(f"✅ Graph: {edge_index.size(1)} edges, {node_features.size(1)} features per node")
+        print(f"[OK] Graph: {edge_index.size(1)} edges, {node_features.size(1)} features per node")
         
         return node_features, edge_index, ticker_to_idx
 
@@ -355,7 +355,7 @@ class FinancialDataset:
         """Prepare dataset"""
         
         print("=" * 60)
-        print("🚀 LEAK-FREE FinGAT 2025 - INDIAN MARKET")
+        print("[*] LEAK-FREE FinGAT 2025 - INDIAN MARKET")
         print("Expected: Honest 52-60% Accuracy")
         print("=" * 60)
         
@@ -388,7 +388,7 @@ class FinancialDataset:
             'sector_distribution': self._get_sector_distribution(sectors)
         }
         
-        print(f"\n✓ Dataset ready:")
+        print(f"\n[OK] Dataset ready:")
         print(f"  - {len(all_data)} stocks")
         print(f"  - {node_features.size(1)} features per node")
         print(f"  - {metadata['num_edges']} edges")
@@ -431,7 +431,7 @@ class FinancialDataset:
         metadata['idx_to_sector'] = {v: k for k, v in sector_to_idx.items()}
         metadata['num_sectors'] = sector_count
         
-        print(f"\n✅ Sector-aware graph:")
+        print(f"\n[OK] Sector-aware graph:")
         print(f"  - {sector_count} sectors")
         print(f"  - stock_to_sector shape: {stock_to_sector.shape}")
         print(f"  - sector_edge_index shape: {sector_edge_index.shape}")
@@ -458,7 +458,7 @@ class FinancialDataset:
         val_data = self._create_subgraph(data, val_idx)
         test_data = self._create_subgraph(data, test_idx)
         
-        print(f"\n✅ Data splits:")
+        print(f"\n[OK] Data splits:")
         print(f"   Train: {train_data.num_nodes} stocks")
         print(f"   Val:   {val_data.num_nodes} stocks")
         print(f"   Test:  {test_data.num_nodes} stocks")
@@ -520,7 +520,7 @@ class FinancialDataset:
         
         global_median = np.median(all_future_returns) if all_future_returns else 0.0
         
-        print("\n🚀 LEAK-FREE Target Creation:")
+        print("\n[*] LEAK-FREE Target Creation:")
         print("=" * 60)
         print(f"Global median: {global_median:.6f}")
         print(f"Target window: Days -5 to -1")
@@ -563,16 +563,16 @@ class FinancialDataset:
         total = up_count + down_count
         up_ratio = up_count / total * 100 if total > 0 else 0
         
-        print(f"\n✅ Target Balance:")
+        print(f"\n[OK] Target Balance:")
         print(f"   UP:   {up_count} ({up_ratio:.1f}%)")
         print(f"   DOWN: {down_count} ({100-up_ratio:.1f}%)")
         
         if 45 <= up_ratio <= 55:
-            print(f"   ✅ PERFECTLY BALANCED!")
+            print(f"   [OK] PERFECTLY BALANCED!")
         elif 40 <= up_ratio <= 60:
-            print(f"   ✅ GOOD BALANCE")
+            print(f"   [OK] GOOD BALANCE")
         else:
-            print(f"   ⚠️ WARNING: Imbalanced ({up_ratio:.1f}% UP)")
+            print(f"   [WARNING] Imbalanced ({up_ratio:.1f}% UP)")
         
         print("=" * 60)
         
@@ -595,7 +595,7 @@ def main():
         train_data, val_data, test_data = dataset.create_temporal_splits(graph_data, metadata)
         
         print("\n" + "=" * 60)
-        print("✅ LEAK-FREE DATA READY FOR TRAINING")
+        print("[OK] LEAK-FREE DATA READY FOR TRAINING")
         print("Expected: Honest 52-60% Accuracy")
         print("=" * 60)
         

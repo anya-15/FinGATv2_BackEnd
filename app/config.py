@@ -61,18 +61,18 @@ def load_model_config() -> Dict[str, Any]:
     config_path = Path(settings.CONFIG_PATH)
     
     if not config_path.exists():
-        print(f"⚠️ Config file not found at {config_path}, using defaults")
+        print(f"[WARNING] Config file not found at {config_path}, using defaults")
         return get_default_config()
     
     try:
         with open(config_path, 'r') as f:
             config = yaml.safe_load(f)
         
-        print(f"✅ Loaded config from {config_path}")
+        print(f"[OK] Loaded config from {config_path}")
         return config
     
     except Exception as e:
-        print(f"⚠️ Error loading config: {e}, using defaults")
+        print(f"[WARNING] Error loading config: {e}, using defaults")
         return get_default_config()
 
 

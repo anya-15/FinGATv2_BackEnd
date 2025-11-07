@@ -35,7 +35,7 @@ async def health_check():
 
 @router.get("/predict/top-k", response_model=TopKResponse)
 async def get_top_k_stocks(
-    k: int = Query(10, ge=1, le=50, description="Number of top stocks to return"),
+    k: int = Query(10, ge=1, le=100, description="Number of top stocks to return"),
     sector: Optional[str] = Query(None, description="Filter by sector (e.g., Technology, Finance)"),
     db: Session = Depends(get_db)
 ):
@@ -89,7 +89,7 @@ async def get_sectors(db: Session = Depends(get_db)):
 @router.get("/stocks")
 async def list_stocks(
     sector: Optional[str] = Query(None, description="Filter by sector"),
-    limit: int = Query(100, ge=1, le=1000, description="Maximum stocks to return"),
+    limit: int = Query(500, ge=1, le=1000, description="Maximum stocks to return"),
     db: Session = Depends(get_db)
 ):
     """
@@ -174,6 +174,26 @@ async def get_model_status():
             checkpoint_path=checkpoint_path,
             model_loaded=False
         )
+
+@router.get("/model/status/simple")
+async def get_simple_model_status():
+    """
+    Get simplified model status for frontend dashboard
+    """
+    is_loaded = model_loader.is_loaded()
+    
+    if is_loaded:
+        status = "ready"
+        message = "Model loaded and ready for predictions"
+    else:
+        status = "error"
+        message = "Model not loaded. Please train a model first."
+    
+    return {
+        "status": status,
+        "message": message,
+        "last_prediction": datetime.now().isoformat()
+    }
 
 @router.post("/retrain")
 async def trigger_manual_retrain(background_tasks: BackgroundTasks):
@@ -423,6 +443,9 @@ async def get_utils_status():
     }
 
 
+# Cache for single stock predictor - FORCE RELOAD by setting to None
+_single_stock_predictor = None
+
 @router.get("/predict/single/{ticker}")
 async def predict_single_stock(ticker: str):
     """
@@ -434,25 +457,43 @@ async def predict_single_stock(ticker: str):
     Returns:
         Detailed prediction with confidence, direction, rank, and trading suggestions
     """
+    global _single_stock_predictor
+    
     try:
         # Import the predictor module
         from scripts.predict_single_stock import SingleStockPredictor
         
-        # Initialize predictor
-        try:
-            predictor = SingleStockPredictor('predictions')
-        except FileNotFoundError:
-            raise HTTPException(
-                status_code=404,
-                detail="No prediction files found. Run POST /api/v1/utils/run-predict-now first to generate predictions."
-            )
+        # ALWAYS reload predictor to pick up the Rank column fix
+        # TODO: Remove this after first successful load
+        _single_stock_predictor = None
         
-        # Get prediction
-        result = predictor.predict_stock(ticker)
+        # Initialize predictor (cached)
+        if _single_stock_predictor is None:
+            try:
+                print(f"[SingleStock] Initializing predictor for first time...")
+                _single_stock_predictor = SingleStockPredictor('predictions')
+                print(f"[SingleStock] Predictor loaded with {len(_single_stock_predictor.predictions_df)} stocks")
+            except FileNotFoundError as e:
+                print(f"[SingleStock] ERROR: {e}")
+                raise HTTPException(
+                    status_code=404,
+                    detail="No prediction files found. Run POST /api/v1/utils/run-predict-now first to generate predictions."
+                )
+            except Exception as e:
+                print(f"[SingleStock] ERROR initializing: {e}")
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Error initializing predictor: {str(e)}"
+                )
+        
+        # Get prediction (fast - from cached CSV)
+        print(f"[SingleStock] Getting prediction for {ticker}")
+        result = _single_stock_predictor.predict_stock(ticker)
+        print(f"[SingleStock] Result: {result is not None}")
         
         if result is None:
             # Find similar tickers
-            all_tickers = predictor.predictions_df['Ticker'].tolist()
+            all_tickers = _single_stock_predictor.predictions_df['Ticker'].tolist()
             similar = [t for t in all_tickers if ticker.upper() in t][:5]
             
             raise HTTPException(
@@ -527,7 +568,7 @@ async def predict_single_stock(ticker: str):
         return {
             "ticker": result['ticker'],
             "sector": result['sector'],
-            "prediction_date": predictor.prediction_date,
+            "prediction_date": _single_stock_predictor.prediction_date,
             "prediction": {
                 "direction": direction,
                 "confidence_percentage": round(confidence, 2),

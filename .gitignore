@@ -9,12 +9,13 @@
 *.key
 *.pem
 
-
 # ============================================
-# PYTHON
+# PYTHON CACHE & BUILD
 # ============================================
 __pycache__/
-*.py[cod]
+*.pyc
+*.pyo
+*.pyd
 *$py.class
 *.so
 .Python
@@ -35,15 +36,13 @@ wheels/
 *.egg
 MANIFEST
 
-
 # ============================================
-# VIRTUAL ENVIRONMENT
+# VIRTUAL ENVIRONMENTS
 # ============================================
 venv/
 env/
 ENV/
 .venv/
-
 
 # ============================================
 # IDE & EDITORS
@@ -57,7 +56,6 @@ ENV/
 .pydevproject
 .settings/
 
-
 # ============================================
 # OPERATING SYSTEM
 # ============================================
@@ -69,7 +67,6 @@ ENV/
 ehthumbs.db
 Thumbs.db
 
-
 # ============================================
 # TESTING
 # ============================================
@@ -78,7 +75,6 @@ Thumbs.db
 htmlcov/
 .tox/
 
-
 # ============================================
 # LOGS
 # ============================================
@@ -86,11 +82,9 @@ htmlcov/
 logs/
 lightning_logs/
 
-
 # ============================================
 # LARGE FILES - TOO BIG FOR GITHUB
 # ============================================
-# Large zip/archive files
 *.zip
 *.tar.gz
 *.rar
@@ -100,69 +94,70 @@ lightning_logs/
 checkpoints/*.ckpt
 checkpoints/*.pt
 checkpoints/*.pth
-
-# Keep the folder
+# Keep folder visible
 !checkpoints/.gitkeep
-
-# Allow production model (small enough for GitHub)
+# Allow production model
 !checkpoints/production_model.ckpt
-
 
 # ============================================
 # DATA FILES - OPTIONAL
 # ============================================
-# Uncomment if CSV files are too large (>50MB each)
-# indian_data/*.csv
-
-# Keep folder structure
+data/*.csv
+data/*.parquet
+predictions/*.csv
+predictions/*.json
+indian_data/*.csv
+# Always keep folder structure
+!data/.gitkeep
+!predictions/.gitkeep
 !indian_data/.gitkeep
 
-
 # ============================================
-# JUPYTER NOTEBOOKS (Optional)
+# JUPYTER NOTEBOOKS
 # ============================================
 .ipynb_checkpoints/
 *.ipynb
 
-
 # ============================================
-# DATABASE (Local)
+# DATABASE & MISC
 # ============================================
 *.db
 *.sqlite
 *.sqlite3
-
+*.bak
+*.tmp
+.cache/
+test_*.py
 
 # ============================================
-# RL MODELS & PREDICTIONS
+# RL MODEL EXPERIMENTS
 # ============================================
-# RL experiment results (can be large)
 rl_models/hybrid/
 rl_models/feature_selection/
 rl_models/hyperparameter/
-
-# Keep manifest and structure
+# Keep manifest and selected run folder
 !rl_models/selected_runs/
+!rl_models/selected_runs/.gitkeep
 !rl_models/selected_runs/latest_manifest.json
-
-# Allow latest RL model run (needed for predictions)
+# Allow latest RL model run results
 !rl_models/hybrid/2025-11-06_16-49-13/
 !rl_models/hybrid/2025-11-06_16-49-13/*.json
 !rl_models/hybrid/2025-11-06_16-49-13/*.npy
 !rl_models/hybrid/2025-11-06_16-49-13/*.txt
 
-# Prediction outputs (generated files - keep folder only)
-predictions/*.csv
-predictions/*.json
-
-# Keep folder structure
-!predictions/.gitkeep
-
+# ============================================
+# NODE/FRONTEND
+# ============================================
+node_modules/
+.npm
+.eslintcache
+*.tsbuildinfo
 
 # ============================================
-# MISC
+# OTHER OUTPUTS
 # ============================================
-*.bak
-*.tmp
-.cache/
-test_*.py
+.next/
+out/
+results/
+outputs/
+

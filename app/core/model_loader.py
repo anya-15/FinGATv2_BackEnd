@@ -54,29 +54,29 @@ class ModelLoader:
                     # Make path absolute if it's relative
                     if checkpoint_path and not Path(checkpoint_path).is_absolute():
                         checkpoint_path = str(project_root / checkpoint_path)
-                    print(f"ℹ️ Auto-selected checkpoint from manifest: {checkpoint_path}")
+                    print(f"[INFO] Auto-selected checkpoint from manifest: {checkpoint_path}")
                 except Exception as e:
-                    print(f"⚠️ Error reading manifest: {e}")
+                    print(f"[WARNING] Error reading manifest: {e}")
                     checkpoint_path = None
             
             if checkpoint_path is None:
                 checkpoint_path = getattr(settings, 'MODEL_CHECKPOINT_PATH', None)
                 if checkpoint_path and not Path(checkpoint_path).is_absolute():
                     checkpoint_path = str(project_root / checkpoint_path)
-                print(f"⚠️ Manifest not found, falling back to config: {checkpoint_path}")
+                print(f"[WARNING] Manifest not found, falling back to config: {checkpoint_path}")
 
         # Check if already loaded this checkpoint
         if self._model is not None and self._last_loaded == checkpoint_path:
-            print("ℹ️ Model already loaded from this checkpoint")
+            # Model already cached - return silently
             return self._model, self._metadata
 
         # Get device configuration
         device = getattr(settings, 'DEVICE', 'cpu')
         if device == 'cuda' and not torch.cuda.is_available():
-            print("⚠️ CUDA requested but not available, falling back to CPU")
+            print("[WARNING] CUDA requested but not available, falling back to CPU")
             device = 'cpu'
 
-        print(f"📦 Loading FinGAT model from {checkpoint_path}...")
+        print(f"\n[*] Loading FinGAT model from {checkpoint_path}...")
 
         try:
             # Check if file exists
@@ -102,7 +102,7 @@ class ModelLoader:
                 self._metadata = hyper_params.get('metadata', {})
                 config = hyper_params.get('config', {})
             else:
-                print("⚠️ No hyper_parameters found in checkpoint, using empty metadata")
+                print("[WARNING] No hyper_parameters found in checkpoint, using empty metadata")
                 self._metadata = {}
                 config = {}
 
@@ -122,7 +122,7 @@ class ModelLoader:
 
             self._last_loaded = checkpoint_path
 
-            print(f"✅ Model loaded successfully!")
+            print(f"[OK] Model loaded successfully!")
             print(f"   Checkpoint: {checkpoint_path}")
             print(f"   Device: {device}")
 
@@ -136,20 +136,20 @@ class ModelLoader:
             return self._model, self._metadata
 
         except FileNotFoundError as e:
-            print(f"❌ {e}")
-            print("💡 Train a model first: python scripts/train_model.py")
+            print(f"[ERROR] {e}")
+            print("[INFO] Train a model first: python scripts/train_with_hybrid_rl.py")
             raise
         
         except RuntimeError as e:
             if "PytorchStreamReader" in str(e) or "not a zip file" in str(e):
-                print(f"❌ Checkpoint file is corrupted or invalid: {checkpoint_path}")
-                print("💡 Please retrain the model or use a different checkpoint")
+                print(f"[ERROR] Checkpoint file is corrupted or invalid: {checkpoint_path}")
+                print("[INFO] Please retrain the model or use a different checkpoint")
             else:
-                print(f"❌ Runtime error loading model: {e}")
+                print(f"[ERROR] Runtime error loading model: {e}")
             raise
 
         except Exception as e:
-            print(f"❌ Unexpected error loading model: {e}")
+            print(f"[ERROR] Unexpected error loading model: {e}")
             import traceback
             print(traceback.format_exc())
             raise
@@ -159,7 +159,7 @@ class ModelLoader:
         Reload model from checkpoint
         Used after daily training to load new model
         """
-        print("\n🔄 Reloading model with latest checkpoint...")
+        print("\n[*] Reloading model with latest checkpoint...")
         self._model = None
         self._last_loaded = None
         return self.load_model()

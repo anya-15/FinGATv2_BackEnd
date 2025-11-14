@@ -57,9 +57,9 @@ def init_db():
     
     try:
         Base.metadata.create_all(bind=engine)
-        print("✅ Database tables initialized")
+        print("[OK] Database tables initialized")
     except Exception as e:
-        print(f"⚠️ Database initialization warning: {e}")
+        print(f"[WARNING] Database initialization warning: {e}")
 
 
 def test_connection():
@@ -73,8 +73,8 @@ def test_connection():
         db = SessionLocal()
         db.execute("SELECT 1")
         db.close()
-        print("✅ Database connection successful")
+        print("[OK] Database connection successful")
         return True
     except Exception as e:
-        print(f"❌ Database connection failed: {e}")
+        print(f"[ERROR] Database connection failed: {e}")
         return False

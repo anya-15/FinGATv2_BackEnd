@@ -26,21 +26,21 @@ async def lifespan(app: FastAPI):
     Runs when API starts and stops
     """
     print("=" * 60)
-    print("🚀 Starting FinGAT API - Indian Stock Predictions")
+    print("[*] Starting FinGAT API - Indian Stock Predictions")
     print("=" * 60)
     
     # Initialize database
-    print("📊 Initializing database...")
+    print("[*] Initializing database...")
     init_db()
     
     # Load model (or train if doesn't exist)
-    print("🧠 Loading FinGAT model...")
+    print("[*] Loading FinGAT model...")
     try:
         model_loader.load_model()
-        print("✅ Model loaded successfully")
+        print("[OK] Model loaded successfully")
         
         # Pre-initialize predictor to avoid Windows pipe errors during API calls
-        print("🔧 Pre-initializing predictor...")
+        print("[*] Pre-initializing predictor...")
         from app.core.predictor import get_predictor
         import sys, os
         # Suppress output during initialization
@@ -54,33 +54,33 @@ async def lifespan(app: FastAPI):
             finally:
                 sys.stdout = old_stdout
                 sys.stderr = old_stderr
-        print("✅ Predictor pre-initialized")
+        print("[OK] Predictor pre-initialized")
         
     except FileNotFoundError:
-        print("⚠️ No trained model found")
-        print("💡 Run: python scripts/train_model.py")
+        print("[WARNING] No trained model found")
+        print("[INFO] Run: python scripts/train_with_hybrid_rl.py")
         print("   Or trigger training via: POST /api/v1/retrain")
     except Exception as e:
-        print(f"⚠️ Model loading error: {e}")
+        print(f"[WARNING] Model loading error: {e}")
     
     # Start daily training scheduler
-    print("⏰ Starting daily training scheduler...")
+    print("[*] Starting daily training scheduler...")
     scheduler = setup_scheduler()
     scheduler.start()
     print(f"   Scheduled for: {settings.TRAINING_HOUR}:{settings.TRAINING_MINUTE:02d} {settings.TRAINING_TIMEZONE}")
     
     print("=" * 60)
-    print("✅ FinGAT API is ready!")
-    print(f"📖 API Docs: http://localhost:{settings.API_PORT}/docs")
-    print(f"🔍 Health: http://localhost:{settings.API_PORT}/api/v1/health")
+    print("[OK] FinGAT API is ready!")
+    print(f"[INFO] API Docs: http://localhost:{settings.API_PORT}/docs")
+    print(f"[INFO] Health: http://localhost:{settings.API_PORT}/api/v1/health")
     print("=" * 60)
     
     yield
     
     # Shutdown
-    print("\n🛑 Shutting down FinGAT API...")
+    print("\n[*] Shutting down FinGAT API...")
     scheduler.shutdown()
-    print("✅ Shutdown complete")
+    print("[OK] Shutdown complete")
 
 
 # Create FastAPI app

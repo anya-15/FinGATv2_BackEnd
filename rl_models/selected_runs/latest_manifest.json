@@ -1,7 +1,7 @@
 {
-  "run_id": "2025-11-06_23-08-57",
-  "features_path": "rl_models/hybrid/2025-11-06_23-08-57/best_features.npy",
-  "hparams_path": "rl_models/hybrid/2025-11-06_23-08-57/best_hparams.json",
-  "checkpoint_path": "checkpoints/fingat-hybrid-epoch=08-val_mrr=0.5000.ckpt",
+  "run_id": "2025-11-07_18-15-46",
+  "features_path": "rl_models/hybrid/2025-11-07_18-15-46/best_features.npy",
+  "hparams_path": "rl_models/hybrid/2025-11-07_18-15-46/best_hparams.json",
+  "checkpoint_path": "checkpoints/fingat-hybrid-epoch=01-val_mrr=0.1000.ckpt",
   "notes": "Hybrid RL: features + hparams; final 50-epoch training"
 }

@@ -321,12 +321,13 @@ def populate_stocks():
     added_count = 0
     updated_count = 0
     error_count = 0
+    total_files = len(stock_files)
     
     # Track sector statistics
     sector_stats = {}
     
     try:
-        for csv_file in stock_files:
+        for idx, csv_file in enumerate(stock_files, 1):
             ticker = csv_file.stem
             
             try:
@@ -362,7 +363,7 @@ def populate_stocks():
                     stock.industry = industry
                     stock.current_price = current_price
                     updated_count += 1
-                    status = "📝 Updated"
+                    status = "📝"
                 else:
                     # Add new
                     stock = Stock(
@@ -375,12 +376,14 @@ def populate_stocks():
                     )
                     db.add(stock)
                     added_count += 1
-                    status = "✅ Added"
+                    status = "✅"
                 
-                print(f"{status}: {ticker:15s} - {company_name:40s} ({sector})")
+                # Truncate company name for display
+                display_name = company_name[:35] if len(company_name) > 35 else company_name
+                print(f"[{idx}/{total_files}] {status} {ticker:15s} - {display_name:35s} ({sector})")
             
             except Exception as e:
-                print(f"❌ Error with {ticker}: {e}")
+                print(f"[{idx}/{total_files}] ❌ {ticker:15s} - Error: {str(e)[:30]}")
                 error_count += 1
                 continue
         
